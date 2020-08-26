@@ -1,0 +1,9 @@
+[package]
+name = "generust"
+version = "0.1.0"
+authors = ["devpts00 <dev-pts-0@yandex.by>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
