@@ -1,0 +1,1 @@
+{ uuid: ${UUID}, timestamp: ${TIMESTAMP}, integer: ${INTEGER(0,1000000)}, boolean: ${BOOLEAN}, gender: ${GENDER}, choice: ${CHOICE(red, green, blue)} }

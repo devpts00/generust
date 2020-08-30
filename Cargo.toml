@@ -8,10 +8,10 @@ edition = "2018"
 
 [dependencies]
 rand = "*"
-memmap = "*"
-uuid = { version = "0.8", features = ["v4"] }
 chrono = "0.4"
 regex = "1"
+uuid = { version = "0.8", features = ["v4"] }
+structopt = { version = "0.3" }
 
 [profile.release]
 panic = "abort"
