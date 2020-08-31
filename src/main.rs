@@ -4,6 +4,7 @@ use rand::Rng;
 use regex::Regex;
 use structopt::StructOpt;
 use uuid::Uuid;
+use glob;
 
 trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
@@ -69,6 +70,28 @@ impl Integer {
                 max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
             }) as Box<dyn Generust>
         })
+    }
+}
+
+struct IpAddress {}
+
+impl Generust for IpAddress {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+        let mut rng = rand::thread_rng();
+        let b1 = rng.gen_range(1, 255);
+        let b2 = rng.gen_range(1, 255);
+        let b3 = rng.gen_range(1, 255);
+        let b4 = rng.gen_range(1, 255);
+        write!(w, "{}.{}.{}.{}", b1, b2, b3, b4)
+    }
+}
+
+impl IpAddress {
+    fn new(text: &str) -> Option<DG> {
+        if !text.eq("IP_ADDRESS") {
+            return None;
+        }
+        Some(Box::new(IpAddress{}))
     }
 }
 
@@ -154,6 +177,40 @@ impl Choice {
     }
 }
 
+struct TimeZone {
+    elements: Vec<String>
+}
+
+impl Generust for TimeZone {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+        let i = rand::thread_rng().gen_range(0, self.elements.len());
+        w.write(self.elements[i].as_bytes()).map(|_| ())
+    }
+}
+
+impl TimeZone {
+    fn new(text: &str) -> Option<DG> {
+        if !text.eq("TIME_ZONE") {
+            return None;
+        }
+
+        let mut timezone = Box::new(TimeZone{ elements: vec![] });
+
+        let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
+            .expect("unable to read timezones");
+        for tz in tzs {
+            if let Ok(path) = tz {
+                if path.is_file() {
+                    if let Some(name) = path.file_name() {
+                     timezone.elements.push(name.to_os_string().into_string().unwrap())
+                    }
+                }
+            }
+        }
+        Some(timezone)
+    }
+}
+
 struct Composite {
     generators: Vec<Box<dyn Generust>>
 }
@@ -172,6 +229,20 @@ impl Generust for Composite {
 
 impl Composite {
 
+    fn create(text: &str) -> Box<dyn Generust> {
+        Box::new(
+            match text {
+                "UUID" => {
+                    Uuid4{}
+                },
+
+                _ => {
+                    panic!("unknown macro {}", text)
+                }
+            }
+        )
+    }
+
     fn find(fs: &[fn(&str) -> Option<DG>], text: &str) -> Option<DG> {
         match fs.iter().map(|f| f(text)).find(|x| x.is_some()) {
             Some(res) => res,
@@ -189,7 +260,9 @@ impl Composite {
             Integer::new,
             Boolean::new,
             Gender::new,
-            Choice::new
+            Choice::new,
+            IpAddress::new,
+            TimeZone::new
         ];
         for cap in rx.captures_iter(text) {
 
