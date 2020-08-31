@@ -1,10 +1,10 @@
 use std::io::{BufWriter, Result, Write};
 
+use glob;
 use rand::Rng;
 use regex::Regex;
 use structopt::StructOpt;
 use uuid::Uuid;
-use glob;
 
 trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
@@ -164,7 +164,7 @@ impl Composite {
         }
     }
 
-    fn new(text: &str) -> Option<DG> {
+    fn new(text: &str) -> Box<dyn Generust> {
         let mut gs: Vec<Box<dyn Generust>> = vec![];
         let mut start = 0;
         let rx = Regex::new(r"(\$\{([^}]+)})").unwrap();
@@ -191,16 +191,18 @@ impl Composite {
             None => (),
         }
 
-        Some(Box::new(Composite { generusts: gs }))
+        Box::new(Composite { generusts: gs })
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::net::IpAddr;
+
     use chrono::DateTime;
     use uuid::Uuid;
 
-    use crate::{Composite, Generust, Integer, Text, Timestamp, Uuid4};
+    use crate::Composite;
 
     fn buf(size: usize) -> Vec<u8> {
         Vec::with_capacity(size)
@@ -214,69 +216,76 @@ mod test {
     fn test_text() {
         let text = "hello";
         let mut buf = buf(10);
-        let gr = Text { text: String::from(text) };
-        assert!(gr.generate(& mut buf).is_ok());
+        let g = Composite::create(text);
+        assert!(g.generate(& mut buf).is_ok());
         let str = str(buf);
-        println!("text: {}", str);
         assert_eq!(text, str);
+    }
+
+    fn test(name: &str) -> String {
+        let mut buf = buf(128);
+        let g = Composite::create(name);
+        assert!(g.generate(&mut buf).is_ok());
+        str(buf)
     }
 
     #[test]
     fn test_uuid() {
-        let mut buf = buf(32);
-        let gr = Uuid4::new("UUID").unwrap();
-        assert!(gr.generate(&mut buf).is_ok());
-        let str = str(buf);
+        let str = test("UUID");
         assert!(Uuid::parse_str(&str).is_ok());
-        println!("uuid4: {}", str);
     }
 
     #[test]
     fn test_integer() {
-        let mut buf = buf(16);
-        let gr = Integer::new("INTEGER(0,100)").unwrap();
-        assert!(gr.generate(& mut buf).is_ok());
-        let str = str(buf);
+        let str = test("INTEGER(0,100)");
         assert!(str.parse::<i64>().is_ok());
-        println!("int: {}", str);
-
     }
 
     #[test]
     fn test_timestamp() {
-        let mut buf = buf(32);
-        let gr = Timestamp {};
-        assert!(gr.generate(& mut buf).is_ok());
-        let str = str(buf);
+        let str = test("TIMESTAMP");
         assert!(DateTime::parse_from_rfc3339(&str).is_ok());
-        println!("timestamp: {}", str);
+    }
+
+    #[test]
+    fn test_ipaddress() {
+        let str = test("IPADDRESS");
+        assert!(str.parse::<IpAddr>().is_ok());
+    }
+
+    #[test]
+    fn test_phone() {
+        test("PHONE");
+    }
+
+    #[test]
+    fn test_choice() {
+        let str = test("CHOICE(1,2,3)");
+        assert!(str.eq("1") || str.eq("2") || str.eq("3"));
+    }
+
+    #[test]
+    fn test_timezone() {
+        test("TIMEZONE");
+    }
+
+    #[test]
+    fn test_boolean() {
+        let str = test("BOOLEAN");
+        assert!(str.eq("true") || str.eq("false"));
+    }
+
+    #[test]
+    fn test_gender() {
+        let str = test("GENDER");
+        assert!(str.eq("Male") || str.eq("Female"));
     }
 
     #[test]
     fn test_composite() {
+        let g = Composite::new("${UUID},${CHOICE(1,2,3),${INTEGER(1,10)}");
         let mut buf = buf(128);
-        let gr = Composite {
-            generusts: vec![
-                Box::new(Integer {min: 0, max: 10}),
-                Box::new(Text { text: String::from(", ")}),
-                Box::new(Timestamp{}),
-                Box::new(Text { text: String::from(", ")}),
-                Box::new(Uuid4{}),
-            ]
-        };
-        assert!(gr.generate(& mut buf).is_ok());
-        let str = str(buf);
-        println!("composite: {}", str);
-    }
-
-    #[test]
-    fn test_parse() {
-        let mut buf = buf(128);
-        let gr = Composite::new("{ uuid: ${UUID}, timestamp: ${TIMESTAMP}, integer: ${INTEGER(0,100)} }").unwrap();
-        for _ in 0..5 {
-            assert!(gr.generate(& mut buf).is_ok());
-        }
-        println!("{}", str(buf));
+        assert!(g.generate(& mut buf).is_ok());
     }
 }
 
@@ -302,8 +311,7 @@ fn main() {
     let template = std::fs::read_to_string(opts.template)
         .expect("unable to read template file");
 
-    let generust = Composite::new(&template)
-        .expect("unable to parse template");
+    let generust = Composite::new(&template);
 
     for _ in 0..opts.count {
         generust.generate(&mut buffer).expect("unable to generate data");
