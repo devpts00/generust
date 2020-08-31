@@ -164,10 +164,12 @@ impl Composite {
         }
     }
 
-    fn new(text: &str) -> Box<dyn Generust> {
+    fn parse(text: &str, symbol: &str) -> Box<dyn Generust> {
         let mut gs: Vec<Box<dyn Generust>> = vec![];
         let mut start = 0;
-        let rx = Regex::new(r"(\$\{([^}]+)})").unwrap();
+
+        let rx = format!("({}{})", symbol, r"\{([^}]+)}");
+        let rx = Regex::new(&rx).unwrap();
         for cap in rx.captures_iter(text) {
 
             let outer = cap.get(1).unwrap();
@@ -283,7 +285,7 @@ mod test {
 
     #[test]
     fn test_composite() {
-        let g = Composite::new("${UUID},${CHOICE(1,2,3),${INTEGER(1,10)}");
+        let g = Composite::parse("${UUID},${CHOICE(1,2,3),${INTEGER(1,10)}");
         let mut buf = buf(128);
         assert!(g.generate(& mut buf).is_ok());
     }
@@ -298,6 +300,8 @@ struct Options {
     output: String,
     #[structopt(short, long, default_value = "100", help = "Number of records to generate")]
     count: u32,
+    #[structopt(short, long, default_value = r"\$", help = "Symbol to start macros in regex")]
+    symbol: String,
 }
 
 fn main() {
@@ -311,7 +315,7 @@ fn main() {
     let template = std::fs::read_to_string(opts.template)
         .expect("unable to read template file");
 
-    let generust = Composite::new(&template);
+    let generust = Composite::parse(&template, &opts.symbol);
 
     for _ in 0..opts.count {
         generust.generate(&mut buffer).expect("unable to generate data");
