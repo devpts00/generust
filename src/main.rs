@@ -73,14 +73,26 @@ impl Generust for Timestamp {
     }
 }
 
-struct Elements {
-    elements: Vec<String>
+struct Choice {
+    vars: Vec<String>
 }
 
-impl Generust for Elements {
+impl Generust for Choice {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        let i = rand::thread_rng().gen_range(0, self.elements.len());
-        w.write(self.elements[i].as_bytes()).map(|_| ())
+        let i = rand::thread_rng().gen_range(0, self.vars.len());
+        w.write(self.vars[i].as_bytes()).map(|_| ())
+    }
+}
+
+struct Phone {}
+
+impl Generust for Phone {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+        let mut rng = rand::thread_rng();
+        let x1 = rng.gen_range(1, 1000);
+        let x2 = rng.gen_range(1, 1000);
+        let x3 = rng.gen_range(1, 10000);
+        write!(w, "8-{:03}-{:03}-{:04}", x1, x2, x3)
     }
 }
 
@@ -113,33 +125,35 @@ impl Composite {
             Box::new(IpAddress {})
         } else if text.eq("TIMESTAMP") {
             Box::new(Timestamp {})
+        } else if text.eq("PHONE") {
+            Box::new(Phone {})
         } else if text.eq("BOOLEAN") {
-            Box::new(Elements { elements: vec![String::from("true"), String::from("false")] })
+            Box::new(Choice { vars: vec![String::from("true"), String::from("false")] })
         } else if text.eq("GENDER") {
-            Box::new(Elements { elements: vec![String::from("Male"), String::from("Female")] })
+            Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] })
         } else if text.eq("TIMEZONE") {
-            let mut es = vec![];
+            let mut vs = vec![];
             let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
                 .expect("unable to read timezones");
             for tz in tzs {
                 if let Ok(path) = tz {
                     if path.is_file() {
                         if let Some(name) = path.file_name() {
-                            es.push(name.to_os_string().into_string().unwrap())
+                            vs.push(name.to_os_string().into_string().unwrap())
                         }
                     }
                 }
             }
-            Box::new(Elements { elements: es })
+            Box::new(Choice { vars: vs })
         } else if let Some(cap) = rx_choice.captures(text) {
-            let mut es = vec![];
-            for e in cap.get(1).unwrap().as_str().split(",") {
-                let te = e.trim();
-                if !te.is_empty() {
-                    es.push(String::from(te));
+            let mut vs = vec![];
+            for v in cap.get(1).unwrap().as_str().split(",") {
+                let tv = v.trim();
+                if !tv.is_empty() {
+                    vs.push(String::from(tv));
                 }
             }
-            Box::new(Elements { elements: es })
+            Box::new(Choice { vars: vs })
         } else if let Some(cap) = rx_integer.captures(text) {
             Box::new(Integer {
                 min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
