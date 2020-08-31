@@ -1,1 +1,1 @@
-{ uuid: ${UUID}, timestamp: ${TIMESTAMP}, integer: ${INTEGER(0,1000000)}, boolean: ${BOOLEAN}, gender: ${GENDER}, choice: ${CHOICE(red, green, blue, cyan)}, ip_address: ${IPADDRESS}, time_zone: ${TIMEZONE}, phone: ${PHONE}, file: ${FILE(big_output.dat)} }
+{ uuid: ${UUID}, timestamp: ${TIMESTAMP}, integer: ${INTEGER(0,1000000)}, boolean: ${BOOLEAN}, gender: ${GENDER}, choice: ${CHOICE(red, green, blue, cyan)}, ip_address: ${IPADDRESS}, time_zone: ${TIMEZONE}, phone: ${PHONE}, file: ${FILE(big_output.dat)}, encoded: ${ENCODEDID(0,100000000)} }

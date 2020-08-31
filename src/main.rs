@@ -116,6 +116,31 @@ impl Generust for MmapFile {
     }
 }
 
+struct EncodedId {
+    min: usize,
+    max: usize
+}
+
+impl Generust for EncodedId {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+        let id = rand::thread_rng().gen_range(self.min, self.max);
+        println!("id: {}", id);
+        let obf = 166258;
+        let rep = b"23456789BCDFGHJKLMNPQRSTVWXYZ";
+        let mut id = id ^ obf;
+        let mut buf = Vec::with_capacity(6);
+        while id != 0 {
+            buf.push(rep[id % rep.len()]);
+            id = id / rep.len();
+        }
+        while buf.len() < 6 {
+            buf.push(rep[0]);
+        }
+        buf.reverse();
+        w.write(&buf).map(|_| ())
+    }
+}
+
 struct Composite {
     generusts: Vec<Box<dyn Generust>>
 }
@@ -138,6 +163,7 @@ impl Composite {
 
         let rx_choice = Regex::new(r"^CHOICE\((.+)\)$").unwrap();
         let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap();
+        let rx_encodedid = Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$").unwrap();
         let rx_file = Regex::new(r"^FILE\((.+)\)$").unwrap();
 
         if text.eq("UUID") {
@@ -202,6 +228,11 @@ impl Composite {
             Box::new(Integer {
                 min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
                 max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
+            })
+        } else if let Some(cap) = rx_encodedid.captures(text) {
+            Box::new(EncodedId {
+                min: cap.get(1).unwrap().as_str().parse::<usize>().unwrap(),
+                max: cap.get(2).unwrap().as_str().parse::<usize>().unwrap(),
             })
         } else {
             Box::new(Text{ text: String::from(text) })
