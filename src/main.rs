@@ -1,11 +1,11 @@
-use std::io::{BufWriter, Result, Write, BufReader, BufRead};
+use std::io::{BufRead, BufReader, BufWriter, Result, Write};
 
 use glob;
+use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
 use structopt::StructOpt;
 use uuid::Uuid;
-use memmap::{MmapOptions, Mmap};
 
 trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
@@ -103,16 +103,7 @@ struct MmapFile {
 
 impl Generust for MmapFile {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        let offset = rand::thread_rng().gen_range(0, self.mem.len());
-        let mut start = offset;
-        while start > 0 && self.mem[start - 1] != b'\n' {
-            start -= 1;
-        }
-        let mut end = offset;
-        while end < self.mem.len() && self.mem[end] != b'\n' {
-            end += 1;
-        }
-        w.write(&self.mem[start..end]).map(|_| ())
+        w.write(Bytes::random(&self.mem)).map(|_| ())
     }
 }
 
@@ -124,7 +115,6 @@ struct EncodedId {
 impl Generust for EncodedId {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
         let id = rand::thread_rng().gen_range(self.min, self.max);
-        println!("id: {}", id);
         let obf = 166258;
         let rep = b"23456789BCDFGHJKLMNPQRSTVWXYZ";
         let mut id = id ^ obf;
@@ -138,6 +128,31 @@ impl Generust for EncodedId {
         }
         buf.reverse();
         w.write(&buf).map(|_| ())
+    }
+}
+
+struct Bytes {
+    bytes: &'static [u8]
+}
+
+impl Bytes {
+    fn random(data: &[u8]) -> &[u8] {
+        let offset = rand::thread_rng().gen_range(0, data.len());
+        let mut start = offset;
+        while start > 0 && data[start - 1] != b'\n' {
+            start -= 1;
+        }
+        let mut end = offset;
+        while end < data.len() && data[end] != b'\n' {
+            end += 1;
+        }
+        &data[start..end]
+    }
+}
+
+impl Generust for Bytes {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+        w.write(Bytes::random(self.bytes)).map(|_| ())
     }
 }
 
@@ -178,6 +193,12 @@ impl Composite {
             Box::new(Choice { vars: vec![String::from("true"), String::from("false")] })
         } else if text.eq("GENDER") {
             Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] })
+        } else if text.eq("FIRST") {
+            Box::new(Bytes { bytes: include_bytes!("../dat/first.csv") })
+        } else if text.eq("LAST") {
+            Box::new(Bytes { bytes: include_bytes!("../dat/last.csv") })
+        } else if text.eq("DOMAIN") {
+            Box::new(Bytes { bytes: include_bytes!("../dat/domain.csv") })
         } else if text.eq("TIMEZONE") {
             let mut vs = vec![];
             let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
@@ -356,6 +377,11 @@ mod test {
     fn test_gender() {
         let str = test("GENDER");
         assert!(str.eq("Male") || str.eq("Female"));
+    }
+
+    #[test]
+    fn test_bytes() {
+        let g = Composite::create("LAST");
     }
 
     #[test]
