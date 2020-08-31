@@ -171,19 +171,18 @@ impl Composite {
             let name = cap.get(1).unwrap().as_str().trim();
 
             let meta = std::fs::metadata(name)
-                .expect("unable to get file info");
+                .expect(&format!("failed to get info of '{}'", name));
             let file = std::fs::File::open(name)
-                .expect("unable to open file");
+                .expect(&format!("failed to open '{}'", name));
             if meta.len() < 8 * 1024 {
                 for line in BufReader::new(file).lines() {
                     match line {
                         Ok(txt) => vs.push(txt),
-                        Err(err) => panic!("failed to read line: {}", err)
+                        Err(err) => panic!("failed to read line: '{}'", err)
                     }
                 }
                 Box::new(Choice{vars: vs})
             } else {
-                println!("mmap!");
                 let mmap = unsafe {
                     MmapOptions::new().map(&file).expect("unable to mmap file")
                 };

@@ -13,5 +13,8 @@ test:
 run:
 	cargo run -- -c 1000 -t template.txt -o output.dat
 
+run-stress:
+	cargo run --release -- -c 10000000 -t template.txt -o output.dat
+
 help:
 	cargo run -- --help
