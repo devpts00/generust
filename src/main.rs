@@ -41,15 +41,6 @@ impl Generust for Uuid4 {
     }
 }
 
-impl Uuid4 {
-    fn new(text: &str) -> Option<DG> {
-        if !text.eq("UUID") {
-            return None;
-        }
-        Some(Box::new(Uuid4{}))
-    }
-}
-
 struct Integer {
     min: i64,
     max: i64
@@ -58,18 +49,6 @@ struct Integer {
 impl Generust for Integer {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
         write!(w, "{}", rand::thread_rng().gen_range(self.min, self.max))
-    }
-}
-
-impl Integer {
-    fn new(text: &str) -> Option<DG> {
-        let rx = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap();
-        rx.captures(text).map(|cap| {
-            Box::new(Integer {
-                min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
-                max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
-            }) as Box<dyn Generust>
-        })
     }
 }
 
@@ -86,15 +65,6 @@ impl Generust for IpAddress {
     }
 }
 
-impl IpAddress {
-    fn new(text: &str) -> Option<DG> {
-        if !text.eq("IP_ADDRESS") {
-            return None;
-        }
-        Some(Box::new(IpAddress{}))
-    }
-}
-
 struct Timestamp {}
 
 impl Generust for Timestamp {
@@ -103,122 +73,25 @@ impl Generust for Timestamp {
     }
 }
 
-impl Timestamp {
-    fn new(text: &str) -> Option<DG> {
-        if !text.eq("TIMESTAMP") {
-            return None;
-        }
-        Some(Box::new(Timestamp{}))
-    }
-}
-
-struct Boolean {}
-
-impl Generust for Boolean {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        write!(w, "{}", rand::thread_rng().gen_bool(0.5))
-    }
-}
-
-impl Boolean {
-    fn new(text: &str) -> Option<DG> {
-        if !text.eq("BOOLEAN") {
-            return None;
-        }
-        Some(Box::new(Boolean{}))
-    }
-}
-
-struct Gender {}
-
-impl Generust for Gender {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        let gender = match rand::thread_rng().gen_bool(0.5) {
-            true => "Male",
-            false => "Female",
-        };
-        w.write(gender.as_bytes()).map(|_| ())
-    }
-}
-
-impl Gender {
-    fn new(text: &str) -> Option<DG> {
-        if !text.eq("GENDER") {
-            return None;
-        }
-        Some(Box::new(Gender{}))
-    }
-}
-
-struct Choice {
+struct Elements {
     elements: Vec<String>
 }
 
-impl Generust for Choice {
+impl Generust for Elements {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
         let i = rand::thread_rng().gen_range(0, self.elements.len());
         w.write(self.elements[i].as_bytes()).map(|_| ())
-    }
-}
-
-impl Choice {
-    fn new(text: &str) -> Option<DG> {
-        let rx = Regex::new(r"^CHOICE\((.+)\)$").unwrap();
-        rx.captures(text).map(|cap| {
-            let mut choice = Box::new(Choice { elements: vec![] });
-            for el in cap.get(1).unwrap().as_str().split(",") {
-                let tel = el.trim();
-                if !tel.is_empty() {
-                    choice.elements.push(String::from(el.trim()));
-                }
-            }
-            choice as Box<dyn Generust>
-        })
-    }
-}
-
-struct TimeZone {
-    elements: Vec<String>
-}
-
-impl Generust for TimeZone {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        let i = rand::thread_rng().gen_range(0, self.elements.len());
-        w.write(self.elements[i].as_bytes()).map(|_| ())
-    }
-}
-
-impl TimeZone {
-    fn new(text: &str) -> Option<DG> {
-        if !text.eq("TIME_ZONE") {
-            return None;
-        }
-
-        let mut timezone = Box::new(TimeZone{ elements: vec![] });
-
-        let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
-            .expect("unable to read timezones");
-        for tz in tzs {
-            if let Ok(path) = tz {
-                if path.is_file() {
-                    if let Some(name) = path.file_name() {
-                     timezone.elements.push(name.to_os_string().into_string().unwrap())
-                    }
-                }
-            }
-        }
-        Some(timezone)
     }
 }
 
 struct Composite {
-    generators: Vec<Box<dyn Generust>>
+    generusts: Vec<Box<dyn Generust>>
 }
 
 impl Generust for Composite {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        for gr in &self.generators {
-            match gr.generate(w) {
+        for g in &self.generusts {
+            match g.generate(w) {
                 Err(err) => return Err(err),
                 _ => continue
             }
@@ -230,40 +103,57 @@ impl Generust for Composite {
 impl Composite {
 
     fn create(text: &str) -> Box<dyn Generust> {
-        Box::new(
-            match text {
-                "UUID" => {
-                    Uuid4{}
-                },
 
-                _ => {
-                    panic!("unknown macro {}", text)
+        let rx_choice = Regex::new(r"^CHOICE\((.+)\)$").unwrap();
+        let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap();
+
+        if text.eq("UUID") {
+            Box::new(Uuid4 {})
+        } else if text.eq("IPADDRESS") {
+            Box::new(IpAddress {})
+        } else if text.eq("TIMESTAMP") {
+            Box::new(Timestamp {})
+        } else if text.eq("BOOLEAN") {
+            Box::new(Elements { elements: vec![String::from("true"), String::from("false")] })
+        } else if text.eq("GENDER") {
+            Box::new(Elements { elements: vec![String::from("Male"), String::from("Female")] })
+        } else if text.eq("TIMEZONE") {
+            let mut es = vec![];
+            let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
+                .expect("unable to read timezones");
+            for tz in tzs {
+                if let Ok(path) = tz {
+                    if path.is_file() {
+                        if let Some(name) = path.file_name() {
+                            es.push(name.to_os_string().into_string().unwrap())
+                        }
+                    }
                 }
             }
-        )
-    }
-
-    fn find(fs: &[fn(&str) -> Option<DG>], text: &str) -> Option<DG> {
-        match fs.iter().map(|f| f(text)).find(|x| x.is_some()) {
-            Some(res) => res,
-            None => None
+            Box::new(Elements { elements: es })
+        } else if let Some(cap) = rx_choice.captures(text) {
+            let mut es = vec![];
+            for e in cap.get(1).unwrap().as_str().split(",") {
+                let te = e.trim();
+                if !te.is_empty() {
+                    es.push(String::from(te));
+                }
+            }
+            Box::new(Elements { elements: es })
+        } else if let Some(cap) = rx_integer.captures(text) {
+            Box::new(Integer {
+                min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
+                max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
+            })
+        } else {
+            Box::new(Text{ text: String::from(text) })
         }
     }
 
     fn new(text: &str) -> Option<DG> {
-        let mut grs: Vec<Box<dyn Generust>> = vec![];
+        let mut gs: Vec<Box<dyn Generust>> = vec![];
         let mut start = 0;
         let rx = Regex::new(r"(\$\{([^}]+)})").unwrap();
-        let factory = [
-            Uuid4::new,
-            Timestamp::new,
-            Integer::new,
-            Boolean::new,
-            Gender::new,
-            Choice::new,
-            IpAddress::new,
-            TimeZone::new
-        ];
         for cap in rx.captures_iter(text) {
 
             let outer = cap.get(1).unwrap();
@@ -271,26 +161,23 @@ impl Composite {
 
             // Text
             match Text::new(&text[start .. outer.start()]) {
-                Some(gr) => grs.push(gr),
+                Some(gr) => gs.push(gr),
                 None => (),
             }
 
             // Generust
-            match Composite::find(&factory, inner.as_str()) {
-                Some(gr) => grs.push(gr),
-                None => return None,
-            }
+            gs.push(Composite::create(inner.as_str()));
 
             start = outer.end();
         }
 
         // Text
         match Text::new(&text[start .. ]) {
-            Some(gr) => grs.push(gr),
+            Some(g) => gs.push(g),
             None => (),
         }
 
-        Some(Box::new(Composite { generators: grs }))
+        Some(Box::new(Composite { generusts: gs }))
     }
 }
 
@@ -355,7 +242,7 @@ mod test {
     fn test_composite() {
         let mut buf = buf(128);
         let gr = Composite {
-            generators: vec![
+            generusts: vec![
                 Box::new(Integer {min: 0, max: 10}),
                 Box::new(Text { text: String::from(", ")}),
                 Box::new(Timestamp{}),
