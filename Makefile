@@ -1,3 +1,6 @@
+check:
+	cargo check
+
 build:
 	cargo build
 
@@ -8,7 +11,7 @@ test:
 	cargo test -- --nocapture
 
 run:
-	cargo run -- -c 1000 -t template.txt -o output.txt
+	cargo run -- -c 1000 -t template.txt -o output.dat
 
 help:
 	cargo run -- --help

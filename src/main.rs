@@ -1,10 +1,11 @@
-use std::io::{BufWriter, Result, Write};
+use std::io::{BufWriter, Result, Write, BufReader, BufRead};
 
 use glob;
 use rand::Rng;
 use regex::Regex;
 use structopt::StructOpt;
 use uuid::Uuid;
+use memmap::{MmapOptions, Mmap};
 
 trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
@@ -96,6 +97,25 @@ impl Generust for Phone {
     }
 }
 
+struct MmapFile {
+    mem: Mmap
+}
+
+impl Generust for MmapFile {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+        let offset = rand::thread_rng().gen_range(0, self.mem.len());
+        let mut start = offset;
+        while start > 0 && self.mem[start - 1] != b'\n' {
+            start -= 1;
+        }
+        let mut end = offset;
+        while end < self.mem.len() && self.mem[end] != b'\n' {
+            end += 1;
+        }
+        w.write(&self.mem[start..end]).map(|_| ())
+    }
+}
+
 struct Composite {
     generusts: Vec<Box<dyn Generust>>
 }
@@ -118,6 +138,7 @@ impl Composite {
 
         let rx_choice = Regex::new(r"^CHOICE\((.+)\)$").unwrap();
         let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap();
+        let rx_file = Regex::new(r"^FILE\((.+)\)$").unwrap();
 
         if text.eq("UUID") {
             Box::new(Uuid4 {})
@@ -145,6 +166,30 @@ impl Composite {
                 }
             }
             Box::new(Choice { vars: vs })
+        } else if let Some(cap) = rx_file.captures(text) {
+            let mut vs = vec![];
+            let name = cap.get(1).unwrap().as_str().trim();
+
+            let meta = std::fs::metadata(name)
+                .expect("unable to get file info");
+            let file = std::fs::File::open(name)
+                .expect("unable to open file");
+            if meta.len() < 8 * 1024 {
+                for line in BufReader::new(file).lines() {
+                    match line {
+                        Ok(txt) => vs.push(txt),
+                        Err(err) => panic!("failed to read line: {}", err)
+                    }
+                }
+                Box::new(Choice{vars: vs})
+            } else {
+                println!("mmap!");
+                let mmap = unsafe {
+                    MmapOptions::new().map(&file).expect("unable to mmap file")
+                };
+
+                Box::new(MmapFile{ mem: mmap })
+            }
         } else if let Some(cap) = rx_choice.captures(text) {
             let mut vs = vec![];
             for v in cap.get(1).unwrap().as_str().split(",") {
@@ -285,7 +330,7 @@ mod test {
 
     #[test]
     fn test_composite() {
-        let g = Composite::parse("${UUID},${CHOICE(1,2,3),${INTEGER(1,10)}");
+        let g = Composite::parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}", r"@");
         let mut buf = buf(128);
         assert!(g.generate(& mut buf).is_ok());
     }

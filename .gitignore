@@ -16,4 +16,4 @@ Cargo.lock
 
 /target
 
-output.txt
+*.dat
