@@ -1,7 +1,20 @@
 use core::result;
 use fern::colors::{Color, ColoredLevelConfig};
+use log::LevelFilter;
+use std::cmp::min;
 
-pub fn setup() -> result::Result<(), fern::InitError> {
+pub fn setup(verbose: u8) -> result::Result<(), fern::InitError> {
+
+    let levels = vec![
+        LevelFilter::Off,
+        LevelFilter::Error,
+        LevelFilter::Warn,
+        LevelFilter::Info,
+        LevelFilter::Debug,
+        LevelFilter::Trace
+    ];
+
+    let level = levels[min(verbose as usize, levels.len() - 1usize)];
 
     let colors = ColoredLevelConfig::new()
         .debug(Color::Blue)
@@ -19,7 +32,7 @@ pub fn setup() -> result::Result<(), fern::InitError> {
                 msg
             ))
         })
-        .level(log::LevelFilter::Debug)
+        .level(level)
         .chain(std::io::stdout())
         .apply()
         .map_err(|err| fern::InitError::SetLoggerError(err))

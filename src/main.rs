@@ -22,12 +22,13 @@ fn quit_err<T>(err: &dyn std::error::Error) -> T {
 
 fn main() {
 
-    match logger::setup() {
+    let opts: Options = Options::from_args();
+
+    match logger::setup(opts.verbose) {
         Ok(()) => log::debug!("logger is successfull initialized"),
         Err(e) => panic!("failed to initalize logger: {}", e)
     }
 
-    let opts: Options = Options::from_args();
     log::info!("template file: {}", opts.template);
     log::info!("output file: {}", opts.output);
     log::info!("line count: {}", opts.count);

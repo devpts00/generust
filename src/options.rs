@@ -11,4 +11,6 @@ pub struct Options {
     pub count: u32,
     #[structopt(short, long, default_value = r"\$", help = "Symbol to start macros in regex")]
     pub symbol: String,
+    #[structopt(short, long, default_value = "2", help = "Verbosity level from 0 to 5")]
+    pub verbose: u8,
 }

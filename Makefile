@@ -14,7 +14,7 @@ test:
 	cargo test -- --nocapture
 
 run:
-	cargo run -- -c 1000 -t template.txt -o output.dat
+	cargo run -- -c 1000 -t template.txt -o output.dat -v 2
 
 run-stress: release
 	cargo run --release -- -c 10000000 -t template.txt -o output.dat

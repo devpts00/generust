@@ -5,13 +5,9 @@ use rand::Rng;
 use regex::Regex;
 use uuid::Uuid;
 
-/// interface
-
 pub trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
 }
-
-/// implementation
 
 struct Text {
     text: String
@@ -23,7 +19,7 @@ impl Generust for Text {
     }
 }
 
-struct Uuid4 {}
+struct Uuid4;
 
 impl Generust for Uuid4 {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
@@ -42,7 +38,7 @@ impl Generust for Integer {
     }
 }
 
-struct IpAddress {}
+struct IpAddress;
 
 impl Generust for IpAddress {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
@@ -55,7 +51,7 @@ impl Generust for IpAddress {
     }
 }
 
-struct Timestamp {}
+struct Timestamp;
 
 impl Generust for Timestamp {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
@@ -74,7 +70,7 @@ impl Generust for Choice {
     }
 }
 
-struct Phone {}
+struct Phone;
 
 impl Generust for Phone {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
@@ -169,11 +165,9 @@ pub struct Parser {
     rx_file: Regex,
 }
 
-type ParserResult = std::result::Result<Parser, regex::Error>;
-
 impl Parser {
 
-    pub fn new(symbol: &str) -> ParserResult {
+    pub fn new(symbol: &str) -> std::result::Result<Parser, regex::Error> {
         let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
         match Regex::new(txt) {
             Ok(rx) => Ok(
