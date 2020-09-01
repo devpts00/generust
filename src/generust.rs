@@ -11,7 +11,7 @@ pub trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
 }
 
-pub fn parse(template: &str, symbol: &str) -> Box<dyn Generust> {
+pub fn parse(template: &str, symbol: &str) -> Result<Box<dyn Generust>> {
     parse_template(template, symbol)
 }
 
@@ -165,12 +165,11 @@ impl Generust for Composite {
     }
 }
 
-fn parse_template(template: &str, symbol: &str) -> Box<dyn Generust> {
+fn parse_template(template: &str, symbol: &str) -> Result<Box<dyn Generust>> {
     let mut gs: Vec<Box<dyn Generust>> = vec![];
     let mut start = 0;
 
-    let rx = format!("({}{})", symbol, r"\{([^}]+)}");
-    let rx = Regex::new(&rx).unwrap();
+    let rx = Regex::new(&format!("({}{})", symbol, r"\{([^}]+)}")).unwrap();
     for cap in rx.captures_iter(template) {
 
         let outer = cap.get(1).unwrap();
@@ -182,7 +181,10 @@ fn parse_template(template: &str, symbol: &str) -> Box<dyn Generust> {
         }
 
         // Generust
-        gs.push(parse_macro(inner.as_str()));
+        match parse_macro(inner.as_str()) {
+            Ok(g) => gs.push(g),
+            Err(err) => return Err(err)
+        }
 
         start = outer.end();
     }
@@ -192,14 +194,14 @@ fn parse_template(template: &str, symbol: &str) -> Box<dyn Generust> {
         gs.push(parse_text(&template[start..]))
     }
 
-    Box::new(Composite { generusts: gs })
+    Ok(Box::new(Composite { generusts: gs }))
 }
 
 fn parse_text(text: &str) -> Box<dyn Generust> {
     Box::new(Text { text: String::from(text) })
 }
 
-fn parse_macro(text: &str) -> Box<dyn Generust> {
+fn parse_macro(text: &str) -> Result<Box<dyn Generust>> {
 
     let rx_choice = Regex::new(r"^CHOICE\((.+)\)$").unwrap();
     let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap();
@@ -207,59 +209,69 @@ fn parse_macro(text: &str) -> Box<dyn Generust> {
     let rx_file = Regex::new(r"^FILE\((.+)\)$").unwrap();
 
     if text.eq("UUID") {
-        Box::new(Uuid4 {})
+        Ok(Box::new(Uuid4 {}))
     } else if text.eq("IPADDRESS") {
-        Box::new(IpAddress {})
+        Ok(Box::new(IpAddress {}))
     } else if text.eq("TIMESTAMP") {
-        Box::new(Timestamp {})
+        Ok(Box::new(Timestamp {}))
     } else if text.eq("PHONE") {
-        Box::new(Phone {})
+        Ok(Box::new(Phone {}))
     } else if text.eq("BOOLEAN") {
-        Box::new(Choice { vars: vec![String::from("true"), String::from("false")] })
+        Ok(Box::new(Choice { vars: vec![String::from("true"), String::from("false")] }))
     } else if text.eq("GENDER") {
-        Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] })
+        Ok(Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] }))
     } else if text.eq("FIRST") {
-        Box::new(Lines { bytes: include_bytes!("../dat/first.csv") })
+        Ok(Box::new(Lines { bytes: include_bytes!("../dat/first.csv") }))
     } else if text.eq("LAST") {
-        Box::new(Lines { bytes: include_bytes!("../dat/last.csv") })
+        Ok(Box::new(Lines { bytes: include_bytes!("../dat/last.csv") }))
     } else if text.eq("DOMAIN") {
-        Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") })
+        Ok(Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") }))
     } else if text.eq("TIMEZONE") {
+        let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*").unwrap();
+        //let tzs = glob::glob("/root/**/*").unwrap();
         let mut vs = vec![];
-        let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
-            .expect("unable to read timezones");
         for tz in tzs {
-            if let Ok(path) = tz {
-                if path.is_file() {
-                    if let Some(name) = path.file_name() {
-                        vs.push(name.to_os_string().into_string().unwrap())
+            match tz {
+                Ok(path) => {
+                    if path.is_file() {
+                        if let Some(name) = path.file_name() {
+                            vs.push(name.to_os_string().into_string().unwrap())
+                        }
                     }
+                },
+                Err(err) => {
+                    return Err(err.into_error());
                 }
             }
         }
-        Box::new(Choice { vars: vs })
+        Ok(Box::new(Choice { vars: vs }))
     } else if let Some(cap) = rx_file.captures(text) {
         let mut vs = vec![];
         let name = cap.get(1).unwrap().as_str().trim();
-
-        let meta = std::fs::metadata(name)
-            .expect(&format!("failed to get info of '{}'", name));
-        let file = std::fs::File::open(name)
-            .expect(&format!("failed to open '{}'", name));
+        let meta = match std::fs::metadata(name) {
+            Ok(m) => m,
+            Err(err) => return Err(err)
+        };
+        let file = match std::fs::File::open(name) {
+            Ok(f) => f,
+            Err(err) => return Err(err)
+        };
         if meta.len() < 8 * 1024 {
             for line in BufReader::new(file).lines() {
                 match line {
                     Ok(txt) => vs.push(txt),
-                    Err(err) => panic!("failed to read line: '{}'", err)
+                    Err(err) => return Err(err)
                 }
             }
-            Box::new(Choice{vars: vs})
+            Ok(Box::new(Choice{vars: vs}))
         } else {
             let mmap = unsafe {
-                MmapOptions::new().map(&file).expect("unable to mmap file")
+                match MmapOptions::new().map(&file) {
+                    Ok(m) => m,
+                    Err(err) => return Err(err)
+                }
             };
-
-            Box::new(MmapFile{ mem: mmap })
+            Ok(Box::new(MmapFile{ mem: mmap }))
         }
     } else if let Some(cap) = rx_choice.captures(text) {
         let mut vs = vec![];
@@ -269,19 +281,19 @@ fn parse_macro(text: &str) -> Box<dyn Generust> {
                 vs.push(String::from(tv));
             }
         }
-        Box::new(Choice { vars: vs })
+        Ok(Box::new(Choice { vars: vs }))
     } else if let Some(cap) = rx_integer.captures(text) {
-        Box::new(Integer {
+        Ok(Box::new(Integer {
             min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
             max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
-        })
+        }))
     } else if let Some(cap) = rx_encodedid.captures(text) {
-        Box::new(EncodedId {
+        Ok(Box::new(EncodedId {
             min: cap.get(1).unwrap().as_str().parse::<usize>().unwrap(),
             max: cap.get(2).unwrap().as_str().parse::<usize>().unwrap(),
-        })
+        }))
     } else {
-        parse_text(text)
+        Ok(parse_text(text))
     }
 }
 

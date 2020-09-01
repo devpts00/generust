@@ -1,17 +1,21 @@
 mod generust;
 mod options;
-mod util;
 mod logger;
 
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Write, Error};
 use options::Options;
 use structopt::StructOpt;
+
+fn quit_err<T>(err: Error) -> T {
+    log::error!("error: {}", err);
+    std::process::exit(err.raw_os_error().unwrap_or_else(|| 1));
+}
 
 fn main() {
 
     match logger::setup() {
         Ok(()) => log::debug!("logger is successfull initialized"),
-        Err(err) => panic!("failed to initalize logger: {}", err)
+        Err(e) => panic!("failed to initalize logger: {}", e)
     }
 
     let opts: Options = Options::from_args();
@@ -25,7 +29,7 @@ fn main() {
         Ok(t) => t,
         Err(e) => {
             log::error!("failed to read a template: {}", e);
-            util::quit_err(e)
+            quit_err(e)
         }
     };
 
@@ -34,14 +38,17 @@ fn main() {
         Ok(o) => o,
         Err(e) => {
             log::error!("failed to create an output file: {}", e);
-            util::quit_err(e)
+            quit_err(e)
         }
     };
 
     let mut buffer = BufWriter::new(output);
 
     log::info!("parse the template");
-    let generust = generust::parse(&template, &opts.symbol);
+    let generust = match generust::parse(&template, &opts.symbol) {
+        Ok(g) => g,
+        Err(e) => quit_err(e)
+    };
 
     log::info!("start data generation");
     let mut p = 0;
@@ -56,7 +63,7 @@ fn main() {
             },
             Err(e) => {
                 log::error!("failed to generate line {}: {}", i, e);
-                util::quit_code(1)
+                quit_err(e)
             }
         }
     }
@@ -66,7 +73,7 @@ fn main() {
         Ok(_) => (),
         Err(e) => {
             log::error!("failed to flush output buffer: {}", e);
-            util::quit_err(e)
+            quit_err(e)
         }
     }
 
