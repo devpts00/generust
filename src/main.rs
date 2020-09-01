@@ -1,5 +1,7 @@
+use core::result;
 use std::io::{BufRead, BufReader, BufWriter, Result, Write};
 
+use fern::colors::{Color, ColoredLevelConfig};
 use glob;
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
@@ -103,7 +105,7 @@ struct MmapFile {
 
 impl Generust for MmapFile {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        w.write(Bytes::random(&self.mem)).map(|_| ())
+        w.write(Lines::random(&self.mem)).map(|_| ())
     }
 }
 
@@ -131,11 +133,11 @@ impl Generust for EncodedId {
     }
 }
 
-struct Bytes {
+struct Lines {
     bytes: &'static [u8]
 }
 
-impl Bytes {
+impl Lines {
     fn random(data: &[u8]) -> &[u8] {
         let offset = rand::thread_rng().gen_range(0, data.len());
         let mut start = offset;
@@ -150,9 +152,9 @@ impl Bytes {
     }
 }
 
-impl Generust for Bytes {
+impl Generust for Lines {
     fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        w.write(Bytes::random(self.bytes)).map(|_| ())
+        w.write(Lines::random(self.bytes)).map(|_| ())
     }
 }
 
@@ -194,11 +196,11 @@ impl Composite {
         } else if text.eq("GENDER") {
             Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] })
         } else if text.eq("FIRST") {
-            Box::new(Bytes { bytes: include_bytes!("../dat/first.csv") })
+            Box::new(Lines { bytes: include_bytes!("../dat/first.csv") })
         } else if text.eq("LAST") {
-            Box::new(Bytes { bytes: include_bytes!("../dat/last.csv") })
+            Box::new(Lines { bytes: include_bytes!("../dat/last.csv") })
         } else if text.eq("DOMAIN") {
-            Box::new(Bytes { bytes: include_bytes!("../dat/domain.csv") })
+            Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") })
         } else if text.eq("TIMEZONE") {
             let mut vs = vec![];
             let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")
@@ -405,22 +407,90 @@ struct Options {
     symbol: String,
 }
 
-fn main() {
-    let opts: Options = Options::from_args();
+fn setup_logger() -> result::Result<(), fern::InitError> {
 
-    let output = std::fs::File::create(opts.output)
-        .expect("unable to open output file");
+    let colors = ColoredLevelConfig::new()
+        .debug(Color::Blue)
+        .info(Color::Green)
+        .warn(Color::Yellow)
+        .error(Color::Red);
+
+    fern::Dispatch::new()
+        .format(move |out, msg, rec| {
+            out.finish(format_args!(
+                "{} - {} - {} - {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                rec.target(),
+                colors.color(rec.level()),
+                msg
+            ))
+        })
+        .level(log::LevelFilter::Debug)
+        .chain(std::io::stdout())
+        .apply()
+        .map_err(|err| fern::InitError::SetLoggerError(err))
+}
+
+fn main() {
+    match setup_logger() {
+        Ok(()) => log::info!("logger is successfull initialized"),
+        Err(err) => panic!("failed to initalize logger: {}", err)
+    }
+
+    let opts: Options = Options::from_args();
+    log::info!("template file: {}", opts.template);
+    log::info!("output file: {}", opts.output);
+    log::info!("line count: {}", opts.count);
+    log::info!("macro symbol: {}", opts.symbol);
+
+    log::info!("read a template from '{}'", &opts.template);
+    let template = match std::fs::read_to_string(&opts.template) {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!("failed to read a template: {}", e);
+            std::process::exit(e.raw_os_error().unwrap_or_else(|| 1));
+        }
+    };
+
+    log::info!("create an output file '{}'", &opts.output);
+    let output = match std::fs::File::create(&opts.output) {
+        Ok(o) => o,
+        Err(e) => {
+            log::error!("failed to create an output file: {}", e);
+            std::process::exit(e.raw_os_error().unwrap_or_else(|| 1));
+        }
+    };
 
     let mut buffer = BufWriter::new(output);
 
-    let template = std::fs::read_to_string(opts.template)
-        .expect("unable to read template file");
-
+    log::info!("parse the template");
     let generust = Composite::parse(&template, &opts.symbol);
 
-    for _ in 0..opts.count {
-        generust.generate(&mut buffer).expect("unable to generate data");
+    log::info!("start data generation");
+    let mut p = 0;
+    for i in 0..opts.count {
+        match generust.generate(&mut buffer) {
+            Ok(_) => {
+                let n = 100 * i / opts.count;
+                if n > p {
+                    p = n;
+                    log::debug!("{}%", p);
+                }
+            },
+            Err(e) => {
+                log::error!("failed to generate line {}: {}", i, e);
+                std::process::exit(1);
+            }
+        }
     }
 
-    buffer.flush().expect("unable to flush")
+    log::info!("finish data generation");
+    match buffer.flush() {
+        Ok(_) => {},
+        Err(e) => {
+            log::error!("failed to flush output buffer: {}", e);
+            std::process::exit(e.raw_os_error().unwrap_or_else(|| 1));
+        }
+    }
+
 }
