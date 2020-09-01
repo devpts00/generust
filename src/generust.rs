@@ -1,12 +1,57 @@
-use std::io::{BufRead, BufReader, Result, Write};
+use std::io::{BufRead, BufReader, Write};
 use glob;
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
 use uuid::Uuid;
+use std::fmt::{Display, Formatter, Result};
+
+pub enum GrError {
+    Io(std::io::Error),
+    Regex(regex::Error),
+    Glob(glob::GlobError),
+    Pattern(glob::PatternError)
+}
+
+impl Display for GrError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            GrError::Io(err) => err.fmt(f),
+            GrError::Regex(err) => err.fmt(f),
+            GrError::Glob(err) => err.fmt(f),
+            GrError::Pattern(err) => err.fmt(f),
+        }
+    }
+}
+
+impl From<std::io::Error> for GrError {
+    fn from(err: std::io::Error) -> Self {
+        GrError::Io(err)
+    }
+}
+
+impl From<regex::Error> for GrError {
+    fn from(err: regex::Error) -> Self {
+        GrError::Regex(err)
+    }
+}
+
+impl From<glob::GlobError> for GrError {
+    fn from(err: glob::GlobError) -> Self {
+        GrError::Glob(err)
+    }
+}
+
+impl From<glob::PatternError> for GrError {
+    fn from(err: glob::PatternError) -> Self {
+        GrError::Pattern(err)
+    }
+}
+
+pub type GrResult<T> = std::result::Result<T, GrError>;
 
 pub trait Generust {
-    fn generate(&self, w: &mut dyn Write) -> Result<()>;
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()>;
 }
 
 struct Text {
@@ -14,16 +59,16 @@ struct Text {
 }
 
 impl Generust for Text {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        w.write(self.text.as_bytes()).map(|_| ())
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(w.write(self.text.as_bytes()).map(|_| ())?)
     }
 }
 
 struct Uuid4;
 
 impl Generust for Uuid4 {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        write!(w, "{}", Uuid::new_v4())
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(write!(w, "{}", Uuid::new_v4())?)
     }
 }
 
@@ -33,29 +78,29 @@ struct Integer {
 }
 
 impl Generust for Integer {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        write!(w, "{}", rand::thread_rng().gen_range(self.min, self.max))
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(write!(w, "{}", rand::thread_rng().gen_range(self.min, self.max))?)
     }
 }
 
 struct IpAddress;
 
 impl Generust for IpAddress {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
         let b2 = rng.gen_range(1, 255);
         let b3 = rng.gen_range(1, 255);
         let b4 = rng.gen_range(1, 255);
-        write!(w, "{}.{}.{}.{}", b1, b2, b3, b4)
+        Ok(write!(w, "{}.{}.{}.{}", b1, b2, b3, b4)?)
     }
 }
 
 struct Timestamp;
 
 impl Generust for Timestamp {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        write!(w, "{}", chrono::Utc::now().format("%+"))
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(write!(w, "{}", chrono::Utc::now().format("%+"))?)
     }
 }
 
@@ -64,21 +109,21 @@ struct Choice {
 }
 
 impl Generust for Choice {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
         let i = rand::thread_rng().gen_range(0, self.vars.len());
-        w.write(self.vars[i].as_bytes()).map(|_| ())
+        Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
     }
 }
 
 struct Phone;
 
 impl Generust for Phone {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
         let mut rng = rand::thread_rng();
         let x1 = rng.gen_range(1, 1000);
         let x2 = rng.gen_range(1, 1000);
         let x3 = rng.gen_range(1, 10000);
-        write!(w, "8-{:03}-{:03}-{:04}", x1, x2, x3)
+        Ok(write!(w, "8-{:03}-{:03}-{:04}", x1, x2, x3)?)
     }
 }
 
@@ -87,8 +132,8 @@ struct MmapFile {
 }
 
 impl Generust for MmapFile {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        w.write(Lines::random(&self.mem)).map(|_| ())
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(w.write(Lines::random(&self.mem)).map(|_| ())?)
     }
 }
 
@@ -98,7 +143,7 @@ struct EncodedId {
 }
 
 impl Generust for EncodedId {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
         let id = rand::thread_rng().gen_range(self.min, self.max);
         let obf = 166258;
         let rep = b"23456789BCDFGHJKLMNPQRSTVWXYZ";
@@ -112,7 +157,7 @@ impl Generust for EncodedId {
             buf.push(rep[0]);
         }
         buf.reverse();
-        w.write(&buf).map(|_| ())
+        Ok(w.write(&buf).map(|_| ())?)
     }
 }
 
@@ -136,8 +181,8 @@ impl Lines {
 }
 
 impl Generust for Lines {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
-        w.write(Lines::random(self.bytes)).map(|_| ())
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(w.write(Lines::random(self.bytes)).map(|_| ())?)
     }
 }
 
@@ -146,14 +191,11 @@ pub struct Composite {
 }
 
 impl Generust for Composite {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
         for g in &self.generusts {
-            match g.generate(w) {
-                Err(err) => return Err(err),
-                _ => continue
-            }
+            g.generate(w)?;
         }
-        w.write(b"\n").map(|_| ())
+        Ok(w.write(b"\n").map(|_| ())?)
     }
 }
 
@@ -167,23 +209,19 @@ pub struct Parser {
 
 impl Parser {
 
-    pub fn new(symbol: &str) -> std::result::Result<Parser, regex::Error> {
+    pub fn new(symbol: &str) -> GrResult<Parser> {
         let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
-        match Regex::new(txt) {
-            Ok(rx) => Ok(
-                Parser {
-                    rx_template: rx,
-                    rx_choice: Regex::new(r"^CHOICE\((.+)\)$").unwrap(),
-                    rx_integer: Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap(),
-                    rx_encoded_id: Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$").unwrap(),
-                    rx_file: Regex::new(r"^FILE\((.+)\)$").unwrap()
-                }
-            ),
-            Err(err) => Err(err)
-        }
+        let rx = Regex::new(txt)?;
+        Ok(Parser {
+            rx_template: rx,
+            rx_choice: Regex::new(r"^CHOICE\((.+)\)$").unwrap(),
+            rx_integer: Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap(),
+            rx_encoded_id: Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$").unwrap(),
+            rx_file: Regex::new(r"^FILE\((.+)\)$").unwrap()
+        })
     }
 
-    pub fn parse(&self, template: &str) -> Result<Box<dyn Generust>> {
+    pub fn parse(&self, template: &str) -> GrResult<Box<dyn Generust>> {
         self.parse_template(template)
     }
 
@@ -191,7 +229,7 @@ impl Parser {
         Box::new(Text { text: String::from(text) })
     }
 
-    fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
+    fn parse_macro(&self, text: &str) -> GrResult<Box<dyn Generust>> {
         if text.eq("UUID") {
             Ok(Box::new(Uuid4 {}))
         } else if text.eq("IPADDRESS") {
@@ -211,20 +249,14 @@ impl Parser {
         } else if text.eq("DOMAIN") {
             Ok(Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") }))
         } else if text.eq("TIMEZONE") {
-            let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*").unwrap();
+            let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
             //let tzs = glob::glob("/root/**/*").unwrap();
             let mut vs = vec![];
             for tz in tzs {
-                match tz {
-                    Ok(path) => {
-                        if path.is_file() {
-                            if let Some(name) = path.file_name() {
-                                vs.push(name.to_os_string().into_string().unwrap())
-                            }
-                        }
-                    },
-                    Err(err) => {
-                        return Err(err.into_error());
+                let path = tz?;
+                if path.is_file() {
+                    if let Some(name) = path.file_name() {
+                        vs.push(name.to_os_string().into_string().unwrap())
                     }
                 }
             }
@@ -232,29 +264,15 @@ impl Parser {
         } else if let Some(cap) = self.rx_file.captures(text) {
             let mut vs = vec![];
             let name = cap.get(1).unwrap().as_str().trim();
-            let meta = match std::fs::metadata(name) {
-                Ok(m) => m,
-                Err(err) => return Err(err)
-            };
-            let file = match std::fs::File::open(name) {
-                Ok(f) => f,
-                Err(err) => return Err(err)
-            };
+            let meta = std::fs::metadata(name)?;
+            let file = std::fs::File::open(name)?;
             if meta.len() < 8 * 1024 {
                 for line in BufReader::new(file).lines() {
-                    match line {
-                        Ok(txt) => vs.push(txt),
-                        Err(err) => return Err(err)
-                    }
+                    vs.push(line?);
                 }
                 Ok(Box::new(Choice{vars: vs}))
             } else {
-                let mmap = unsafe {
-                    match MmapOptions::new().map(&file) {
-                        Ok(m) => m,
-                        Err(err) => return Err(err)
-                    }
-                };
+                let mmap = unsafe { MmapOptions::new().map(&file)? };
                 Ok(Box::new(MmapFile{ mem: mmap }))
             }
         } else if let Some(cap) = self.rx_choice.captures(text) {
@@ -281,7 +299,7 @@ impl Parser {
         }
     }
 
-    fn parse_template(&self, template: &str) -> Result<Box<dyn Generust>> {
+    fn parse_template(&self, template: &str) -> GrResult<Box<dyn Generust>> {
         let mut gs: Vec<Box<dyn Generust>> = vec![];
         let mut start = 0;
         for cap in self.rx_template.captures_iter(template) {
@@ -295,10 +313,7 @@ impl Parser {
             }
 
             // Generust
-            match self.parse_macro(inner.as_str()) {
-                Ok(g) => gs.push(g),
-                Err(err) => return Err(err)
-            }
+            gs.push(self.parse_macro(inner.as_str())?);
 
             start = outer.end();
         }
