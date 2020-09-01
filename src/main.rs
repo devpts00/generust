@@ -1,5 +1,5 @@
 use core::result;
-use std::io::{BufRead, BufReader, BufWriter, Result, Write};
+use std::io::{BufRead, BufReader, BufWriter, Result, Write, Error};
 
 use fern::colors::{Color, ColoredLevelConfig};
 use glob;
@@ -431,6 +431,14 @@ fn setup_logger() -> result::Result<(), fern::InitError> {
         .map_err(|err| fern::InitError::SetLoggerError(err))
 }
 
+fn quit_code<T>(code: i32) -> T {
+    std::process::exit(code)
+}
+
+fn quit_err<T>(err: Error) -> T {
+    quit_code(err.raw_os_error().unwrap_or_else(|| 1))
+}
+
 fn main() {
     match setup_logger() {
         Ok(()) => log::info!("logger is successfull initialized"),
@@ -448,7 +456,7 @@ fn main() {
         Ok(t) => t,
         Err(e) => {
             log::error!("failed to read a template: {}", e);
-            std::process::exit(e.raw_os_error().unwrap_or_else(|| 1));
+            quit_err(e)
         }
     };
 
@@ -457,7 +465,7 @@ fn main() {
         Ok(o) => o,
         Err(e) => {
             log::error!("failed to create an output file: {}", e);
-            std::process::exit(e.raw_os_error().unwrap_or_else(|| 1));
+            quit_err(e)
         }
     };
 
@@ -479,17 +487,17 @@ fn main() {
             },
             Err(e) => {
                 log::error!("failed to generate line {}: {}", i, e);
-                std::process::exit(1);
+                quit_code(1)
             }
         }
     }
 
     log::info!("finish data generation");
     match buffer.flush() {
-        Ok(_) => {},
+        Ok(_) => (),
         Err(e) => {
             log::error!("failed to flush output buffer: {}", e);
-            std::process::exit(e.raw_os_error().unwrap_or_else(|| 1));
+            quit_err(e)
         }
     }
 

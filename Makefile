@@ -1,10 +1,13 @@
+clean:
+	cargo clean
+
 check:
 	cargo check
 
 build:
 	cargo build
 
-build-release:
+release:
 	cargo build --release
 
 test:
@@ -13,7 +16,7 @@ test:
 run:
 	cargo run -- -c 1000 -t template.txt -o output.dat
 
-run-stress: build-release
+run-stress: release
 	cargo run --release -- -c 10000000 -t template.txt -o output.dat
 
 help:
