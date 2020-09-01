@@ -11,10 +11,6 @@ pub trait Generust {
     fn generate(&self, w: &mut dyn Write) -> Result<()>;
 }
 
-pub fn parse(template: &str, symbol: &str) -> Result<Box<dyn Generust>> {
-    parse_template(template, symbol)
-}
-
 /// implementation
 
 struct Text {
@@ -165,135 +161,160 @@ impl Generust for Composite {
     }
 }
 
-fn parse_template(template: &str, symbol: &str) -> Result<Box<dyn Generust>> {
-    let mut gs: Vec<Box<dyn Generust>> = vec![];
-    let mut start = 0;
+pub struct Parser {
+    rx_template: Regex,
+    rx_choice: Regex,
+    rx_integer: Regex,
+    rx_encoded_id: Regex,
+    rx_file: Regex,
+}
 
-    let rx = Regex::new(&format!("({}{})", symbol, r"\{([^}]+)}")).unwrap();
-    for cap in rx.captures_iter(template) {
+type ParserResult = std::result::Result<Parser, regex::Error>;
 
-        let outer = cap.get(1).unwrap();
-        let inner = cap.get(2).unwrap();
+impl Parser {
+
+    pub fn new(symbol: &str) -> ParserResult {
+        let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
+        match Regex::new(txt) {
+            Ok(rx) => Ok(
+                Parser {
+                    rx_template: rx,
+                    rx_choice: Regex::new(r"^CHOICE\((.+)\)$").unwrap(),
+                    rx_integer: Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap(),
+                    rx_encoded_id: Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$").unwrap(),
+                    rx_file: Regex::new(r"^FILE\((.+)\)$").unwrap()
+                }
+            ),
+            Err(err) => Err(err)
+        }
+    }
+
+    pub fn parse(&self, template: &str) -> Result<Box<dyn Generust>> {
+        self.parse_template(template)
+    }
+
+    fn parse_text(&self, text: &str) -> Box<dyn Generust> {
+        Box::new(Text { text: String::from(text) })
+    }
+
+    fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
+        if text.eq("UUID") {
+            Ok(Box::new(Uuid4 {}))
+        } else if text.eq("IPADDRESS") {
+            Ok(Box::new(IpAddress {}))
+        } else if text.eq("TIMESTAMP") {
+            Ok(Box::new(Timestamp {}))
+        } else if text.eq("PHONE") {
+            Ok(Box::new(Phone {}))
+        } else if text.eq("BOOLEAN") {
+            Ok(Box::new(Choice { vars: vec![String::from("true"), String::from("false")] }))
+        } else if text.eq("GENDER") {
+            Ok(Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] }))
+        } else if text.eq("FIRST") {
+            Ok(Box::new(Lines { bytes: include_bytes!("../dat/first.csv") }))
+        } else if text.eq("LAST") {
+            Ok(Box::new(Lines { bytes: include_bytes!("../dat/last.csv") }))
+        } else if text.eq("DOMAIN") {
+            Ok(Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") }))
+        } else if text.eq("TIMEZONE") {
+            let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*").unwrap();
+            //let tzs = glob::glob("/root/**/*").unwrap();
+            let mut vs = vec![];
+            for tz in tzs {
+                match tz {
+                    Ok(path) => {
+                        if path.is_file() {
+                            if let Some(name) = path.file_name() {
+                                vs.push(name.to_os_string().into_string().unwrap())
+                            }
+                        }
+                    },
+                    Err(err) => {
+                        return Err(err.into_error());
+                    }
+                }
+            }
+            Ok(Box::new(Choice { vars: vs }))
+        } else if let Some(cap) = self.rx_file.captures(text) {
+            let mut vs = vec![];
+            let name = cap.get(1).unwrap().as_str().trim();
+            let meta = match std::fs::metadata(name) {
+                Ok(m) => m,
+                Err(err) => return Err(err)
+            };
+            let file = match std::fs::File::open(name) {
+                Ok(f) => f,
+                Err(err) => return Err(err)
+            };
+            if meta.len() < 8 * 1024 {
+                for line in BufReader::new(file).lines() {
+                    match line {
+                        Ok(txt) => vs.push(txt),
+                        Err(err) => return Err(err)
+                    }
+                }
+                Ok(Box::new(Choice{vars: vs}))
+            } else {
+                let mmap = unsafe {
+                    match MmapOptions::new().map(&file) {
+                        Ok(m) => m,
+                        Err(err) => return Err(err)
+                    }
+                };
+                Ok(Box::new(MmapFile{ mem: mmap }))
+            }
+        } else if let Some(cap) = self.rx_choice.captures(text) {
+            let mut vs = vec![];
+            for v in cap.get(1).unwrap().as_str().split(",") {
+                let tv = v.trim();
+                if !tv.is_empty() {
+                    vs.push(String::from(tv));
+                }
+            }
+            Ok(Box::new(Choice { vars: vs }))
+        } else if let Some(cap) = self.rx_integer.captures(text) {
+            Ok(Box::new(Integer {
+                min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
+                max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
+            }))
+        } else if let Some(cap) = self.rx_encoded_id.captures(text) {
+            Ok(Box::new(EncodedId {
+                min: cap.get(1).unwrap().as_str().parse::<usize>().unwrap(),
+                max: cap.get(2).unwrap().as_str().parse::<usize>().unwrap(),
+            }))
+        } else {
+            Ok(self.parse_text(text))
+        }
+    }
+
+    fn parse_template(&self, template: &str) -> Result<Box<dyn Generust>> {
+        let mut gs: Vec<Box<dyn Generust>> = vec![];
+        let mut start = 0;
+        for cap in self.rx_template.captures_iter(template) {
+
+            let outer = cap.get(1).unwrap();
+            let inner = cap.get(2).unwrap();
+
+            // Text
+            if outer.start() > start {
+                gs.push(self.parse_text(&template[start .. outer.start()]))
+            }
+
+            // Generust
+            match self.parse_macro(inner.as_str()) {
+                Ok(g) => gs.push(g),
+                Err(err) => return Err(err)
+            }
+
+            start = outer.end();
+        }
 
         // Text
-        if outer.start() > start {
-            gs.push(parse_text(&template[start .. outer.start()]))
+        if template.len() > start {
+            gs.push(self.parse_text(&template[start..]))
         }
 
-        // Generust
-        match parse_macro(inner.as_str()) {
-            Ok(g) => gs.push(g),
-            Err(err) => return Err(err)
-        }
-
-        start = outer.end();
-    }
-
-    // Text
-    if template.len() > start {
-        gs.push(parse_text(&template[start..]))
-    }
-
-    Ok(Box::new(Composite { generusts: gs }))
-}
-
-fn parse_text(text: &str) -> Box<dyn Generust> {
-    Box::new(Text { text: String::from(text) })
-}
-
-fn parse_macro(text: &str) -> Result<Box<dyn Generust>> {
-
-    let rx_choice = Regex::new(r"^CHOICE\((.+)\)$").unwrap();
-    let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap();
-    let rx_encodedid = Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$").unwrap();
-    let rx_file = Regex::new(r"^FILE\((.+)\)$").unwrap();
-
-    if text.eq("UUID") {
-        Ok(Box::new(Uuid4 {}))
-    } else if text.eq("IPADDRESS") {
-        Ok(Box::new(IpAddress {}))
-    } else if text.eq("TIMESTAMP") {
-        Ok(Box::new(Timestamp {}))
-    } else if text.eq("PHONE") {
-        Ok(Box::new(Phone {}))
-    } else if text.eq("BOOLEAN") {
-        Ok(Box::new(Choice { vars: vec![String::from("true"), String::from("false")] }))
-    } else if text.eq("GENDER") {
-        Ok(Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] }))
-    } else if text.eq("FIRST") {
-        Ok(Box::new(Lines { bytes: include_bytes!("../dat/first.csv") }))
-    } else if text.eq("LAST") {
-        Ok(Box::new(Lines { bytes: include_bytes!("../dat/last.csv") }))
-    } else if text.eq("DOMAIN") {
-        Ok(Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") }))
-    } else if text.eq("TIMEZONE") {
-        let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*").unwrap();
-        //let tzs = glob::glob("/root/**/*").unwrap();
-        let mut vs = vec![];
-        for tz in tzs {
-            match tz {
-                Ok(path) => {
-                    if path.is_file() {
-                        if let Some(name) = path.file_name() {
-                            vs.push(name.to_os_string().into_string().unwrap())
-                        }
-                    }
-                },
-                Err(err) => {
-                    return Err(err.into_error());
-                }
-            }
-        }
-        Ok(Box::new(Choice { vars: vs }))
-    } else if let Some(cap) = rx_file.captures(text) {
-        let mut vs = vec![];
-        let name = cap.get(1).unwrap().as_str().trim();
-        let meta = match std::fs::metadata(name) {
-            Ok(m) => m,
-            Err(err) => return Err(err)
-        };
-        let file = match std::fs::File::open(name) {
-            Ok(f) => f,
-            Err(err) => return Err(err)
-        };
-        if meta.len() < 8 * 1024 {
-            for line in BufReader::new(file).lines() {
-                match line {
-                    Ok(txt) => vs.push(txt),
-                    Err(err) => return Err(err)
-                }
-            }
-            Ok(Box::new(Choice{vars: vs}))
-        } else {
-            let mmap = unsafe {
-                match MmapOptions::new().map(&file) {
-                    Ok(m) => m,
-                    Err(err) => return Err(err)
-                }
-            };
-            Ok(Box::new(MmapFile{ mem: mmap }))
-        }
-    } else if let Some(cap) = rx_choice.captures(text) {
-        let mut vs = vec![];
-        for v in cap.get(1).unwrap().as_str().split(",") {
-            let tv = v.trim();
-            if !tv.is_empty() {
-                vs.push(String::from(tv));
-            }
-        }
-        Ok(Box::new(Choice { vars: vs }))
-    } else if let Some(cap) = rx_integer.captures(text) {
-        Ok(Box::new(Integer {
-            min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
-            max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
-        }))
-    } else if let Some(cap) = rx_encodedid.captures(text) {
-        Ok(Box::new(EncodedId {
-            min: cap.get(1).unwrap().as_str().parse::<usize>().unwrap(),
-            max: cap.get(2).unwrap().as_str().parse::<usize>().unwrap(),
-        }))
-    } else {
-        Ok(parse_text(text))
+        Ok(Box::new(Composite { generusts: gs }))
     }
 }
 

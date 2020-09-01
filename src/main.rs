@@ -2,13 +2,22 @@ mod generust;
 mod options;
 mod logger;
 
-use std::io::{BufWriter, Write, Error};
+use std::io::{BufWriter, Write};
 use options::Options;
 use structopt::StructOpt;
+use crate::generust::Parser;
 
-fn quit_err<T>(err: Error) -> T {
+fn quit_err_code<T>(err: &dyn std::error::Error, code: Option<i32>) -> T {
     log::error!("error: {}", err);
-    std::process::exit(err.raw_os_error().unwrap_or_else(|| 1));
+    std::process::exit(code.unwrap_or_else(|| 1));
+}
+
+fn quit_err_io<T>(err: &std::io::Error) -> T {
+    quit_err_code(err, err.raw_os_error())
+}
+
+fn quit_err<T>(err: &dyn std::error::Error) -> T {
+    quit_err_code(err, Some(1))
 }
 
 fn main() {
@@ -29,7 +38,7 @@ fn main() {
         Ok(t) => t,
         Err(e) => {
             log::error!("failed to read a template: {}", e);
-            quit_err(e)
+            quit_err_io(&e)
         }
     };
 
@@ -38,16 +47,23 @@ fn main() {
         Ok(o) => o,
         Err(e) => {
             log::error!("failed to create an output file: {}", e);
-            quit_err(e)
+            quit_err_io(&e)
         }
     };
 
     let mut buffer = BufWriter::new(output);
 
+
+
     log::info!("parse the template");
-    let generust = match generust::parse(&template, &opts.symbol) {
+    let parser = match Parser::new(&opts.symbol) {
+        Ok(p) => p,
+        Err(e) => quit_err(&e)
+    };
+
+    let generust = match parser.parse(&template) {
         Ok(g) => g,
-        Err(e) => quit_err(e)
+        Err(e) => quit_err_io(&e)
     };
 
     log::info!("start data generation");
@@ -63,7 +79,7 @@ fn main() {
             },
             Err(e) => {
                 log::error!("failed to generate line {}: {}", i, e);
-                quit_err(e)
+                quit_err_io(&e)
             }
         }
     }
@@ -73,7 +89,7 @@ fn main() {
         Ok(_) => (),
         Err(e) => {
             log::error!("failed to flush output buffer: {}", e);
-            quit_err(e)
+            quit_err_io(&e)
         }
     }
 
