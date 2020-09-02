@@ -1,3 +1,5 @@
+#![feature(try_trait)]
+
 mod generust;
 mod options;
 mod logger;

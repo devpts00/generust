@@ -4,22 +4,25 @@ use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
 use uuid::Uuid;
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::{Display, Formatter, Result, Debug};
+use std::option::NoneError;
 
 pub enum GrError {
     Io(std::io::Error),
     Regex(regex::Error),
     Glob(glob::GlobError),
-    Pattern(glob::PatternError)
+    Pattern(glob::PatternError),
+    None(NoneError),
 }
 
 impl Display for GrError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            GrError::Io(err) => err.fmt(f),
-            GrError::Regex(err) => err.fmt(f),
-            GrError::Glob(err) => err.fmt(f),
-            GrError::Pattern(err) => err.fmt(f),
+            GrError::Io(err) => Display::fmt(err, f),
+            GrError::Regex(err) => Display::fmt(err, f),
+            GrError::Glob(err) => Display::fmt(err, f),
+            GrError::Pattern(err) => Display::fmt(err, f),
+            GrError::None(err) => Debug::fmt(err, f)
         }
     }
 }
@@ -45,6 +48,12 @@ impl From<glob::GlobError> for GrError {
 impl From<glob::PatternError> for GrError {
     fn from(err: glob::PatternError) -> Self {
         GrError::Pattern(err)
+    }
+}
+
+impl From<NoneError> for GrError {
+    fn from(err: NoneError) -> Self {
+        GrError::None(err)
     }
 }
 
@@ -205,19 +214,33 @@ pub struct Parser {
     rx_integer: Regex,
     rx_encoded_id: Regex,
     rx_file: Regex,
+    by_first: &'static [u8],
+    by_last: &'static [u8],
+    by_domain: &'static [u8],
 }
 
 impl Parser {
 
     pub fn new(symbol: &str) -> GrResult<Parser> {
         let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
-        let rx = Regex::new(txt)?;
+        let rx_template = Regex::new(txt)?;
+        let rx_choice = Regex::new(r"^CHOICE\((.+)\)$")?;
+        let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$")?;
+        let rx_encoded_id = Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$")?;
+        let rx_file = Regex::new(r"^FILE\((.+)\)$")?;
+        let by_first = include_bytes!("../dat/first.csv");
+        let by_last = include_bytes!("../dat/last.csv");
+        let by_domain = include_bytes!("../dat/domain.csv");
+
         Ok(Parser {
-            rx_template: rx,
-            rx_choice: Regex::new(r"^CHOICE\((.+)\)$").unwrap(),
-            rx_integer: Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$").unwrap(),
-            rx_encoded_id: Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$").unwrap(),
-            rx_file: Regex::new(r"^FILE\((.+)\)$").unwrap()
+            rx_template,
+            rx_choice,
+            rx_integer,
+            rx_encoded_id,
+            rx_file,
+            by_first,
+            by_last,
+            by_domain
         })
     }
 
@@ -243,11 +266,11 @@ impl Parser {
         } else if text.eq("GENDER") {
             Ok(Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] }))
         } else if text.eq("FIRST") {
-            Ok(Box::new(Lines { bytes: include_bytes!("../dat/first.csv") }))
+            Ok(Box::new(Lines { bytes: self.by_first }))
         } else if text.eq("LAST") {
-            Ok(Box::new(Lines { bytes: include_bytes!("../dat/last.csv") }))
+            Ok(Box::new(Lines { bytes: self.by_last }))
         } else if text.eq("DOMAIN") {
-            Ok(Box::new(Lines { bytes: include_bytes!("../dat/domain.csv") }))
+            Ok(Box::new(Lines { bytes: self.by_domain }))
         } else if text.eq("TIMEZONE") {
             let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
             //let tzs = glob::glob("/root/**/*").unwrap();
@@ -263,7 +286,8 @@ impl Parser {
             Ok(Box::new(Choice { vars: vs }))
         } else if let Some(cap) = self.rx_file.captures(text) {
             let mut vs = vec![];
-            let name = cap.get(1).unwrap().as_str().trim();
+
+            let name = cap.get(1)?.as_str().trim();
             let meta = std::fs::metadata(name)?;
             let file = std::fs::File::open(name)?;
             if meta.len() < 8 * 1024 {
