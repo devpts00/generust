@@ -1,12 +1,14 @@
+use std::fmt::{Debug, Display, Formatter, Result};
 use std::io::{BufRead, BufReader, Write};
+use std::option::NoneError;
+
 use glob;
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
 use uuid::Uuid;
-use std::fmt::{Display, Formatter, Result, Debug};
-use std::option::NoneError;
 
+#[derive(Debug)]
 pub enum GrError {
     Io(std::io::Error),
     Regex(regex::Error),
@@ -146,30 +148,6 @@ impl Generust for MmapFile {
     }
 }
 
-struct EncodedId {
-    min: usize,
-    max: usize
-}
-
-impl Generust for EncodedId {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
-        let id = rand::thread_rng().gen_range(self.min, self.max);
-        let obf = 166258;
-        let rep = b"23456789BCDFGHJKLMNPQRSTVWXYZ";
-        let mut id = id ^ obf;
-        let mut buf = Vec::with_capacity(6);
-        while id != 0 {
-            buf.push(rep[id % rep.len()]);
-            id = id / rep.len();
-        }
-        while buf.len() < 6 {
-            buf.push(rep[0]);
-        }
-        buf.reverse();
-        Ok(w.write(&buf).map(|_| ())?)
-    }
-}
-
 struct Lines {
     bytes: &'static [u8]
 }
@@ -212,7 +190,6 @@ pub struct Parser {
     rx_template: Regex,
     rx_choice: Regex,
     rx_integer: Regex,
-    rx_encoded_id: Regex,
     rx_file: Regex,
     by_first: &'static [u8],
     by_last: &'static [u8],
@@ -226,7 +203,6 @@ impl Parser {
         let rx_template = Regex::new(txt)?;
         let rx_choice = Regex::new(r"^CHOICE\((.+)\)$")?;
         let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$")?;
-        let rx_encoded_id = Regex::new(r"^ENCODEDID\((\d+),(\d+)\)$")?;
         let rx_file = Regex::new(r"^FILE\((.+)\)$")?;
         let by_first = include_bytes!("../dat/first.csv");
         let by_last = include_bytes!("../dat/last.csv");
@@ -236,7 +212,6 @@ impl Parser {
             rx_template,
             rx_choice,
             rx_integer,
-            rx_encoded_id,
             rx_file,
             by_first,
             by_last,
@@ -313,11 +288,6 @@ impl Parser {
                 min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
                 max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
             }))
-        } else if let Some(cap) = self.rx_encoded_id.captures(text) {
-            Ok(Box::new(EncodedId {
-                min: cap.get(1).unwrap().as_str().parse::<usize>().unwrap(),
-                max: cap.get(2).unwrap().as_str().parse::<usize>().unwrap(),
-            }))
         } else {
             Ok(self.parse_text(text))
         }
@@ -358,7 +328,7 @@ mod test {
     use chrono::DateTime;
     use uuid::Uuid;
 
-    use crate::Composite;
+    use crate::generust::Parser;
 
     fn buf(size: usize) -> Vec<u8> {
         Vec::with_capacity(size)
@@ -368,11 +338,15 @@ mod test {
         String::from_utf8(vec).expect("invalid utf8")
     }
 
+    fn parser() -> Parser {
+        Parser::new("\\$").unwrap()
+    }
+
     #[test]
     fn test_text() {
         let text = "hello";
         let mut buf = buf(10);
-        let g = Composite::create(text);
+        let g = parser().parse_text(text);
         assert!(g.generate(& mut buf).is_ok());
         let str = str(buf);
         assert_eq!(text, str);
@@ -380,7 +354,7 @@ mod test {
 
     fn test(name: &str) -> String {
         let mut buf = buf(128);
-        let g = Composite::create(name);
+        let g = parser().parse_macro(name).ok().unwrap();
         assert!(g.generate(&mut buf).is_ok());
         str(buf)
     }
@@ -445,7 +419,7 @@ mod test {
 
     #[test]
     fn test_composite() {
-        let g = Composite::parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}", r"@");
+        let g = parser().parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}").unwrap();
         let mut buf = buf(128);
         assert!(g.generate(& mut buf).is_ok());
     }
