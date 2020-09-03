@@ -138,38 +138,36 @@ impl Generust for Phone {
     }
 }
 
-struct MmapFile {
-    mem: Mmap
-}
-
-impl Generust for MmapFile {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
-        Ok(w.write(Lines::random(&self.mem)).map(|_| ())?)
+fn random_line(data: &[u8]) -> &[u8] {
+    let offset = rand::thread_rng().gen_range(0, data.len());
+    let mut start = offset;
+    while start > 0 && data[start - 1] != b'\n' {
+        start -= 1;
     }
+    let mut end = offset;
+    while end < data.len() && data[end] != b'\n' {
+        end += 1;
+    }
+    &data[start..end]
 }
 
 struct Lines {
     bytes: &'static [u8]
 }
 
-impl Lines {
-    fn random(data: &[u8]) -> &[u8] {
-        let offset = rand::thread_rng().gen_range(0, data.len());
-        let mut start = offset;
-        while start > 0 && data[start - 1] != b'\n' {
-            start -= 1;
-        }
-        let mut end = offset;
-        while end < data.len() && data[end] != b'\n' {
-            end += 1;
-        }
-        &data[start..end]
+impl Generust for Lines {
+    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+        Ok(w.write(random_line(self.bytes)).map(|_| ())?)
     }
 }
 
-impl Generust for Lines {
+struct MmapFile {
+    mem: Mmap
+}
+
+impl Generust for MmapFile {
     fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
-        Ok(w.write(Lines::random(self.bytes)).map(|_| ())?)
+        Ok(w.write(random_line(&self.mem)).map(|_| ())?)
     }
 }
 
