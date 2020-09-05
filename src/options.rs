@@ -7,9 +7,19 @@ pub struct Options {
     pub template: String,
     #[structopt(short, long, default_value = "output.txt", help = "Output file")]
     pub output: String,
-    #[structopt(short, long, default_value = "100", help = "Number of records to generate")]
+    #[structopt(
+        short,
+        long,
+        default_value = "100",
+        help = "Number of records to generate"
+    )]
     pub count: u32,
-    #[structopt(short, long, default_value = r"\$", help = "Symbol to start macros in regex")]
+    #[structopt(
+        short,
+        long,
+        default_value = r"\$",
+        help = "Symbol to start macros in regex"
+    )]
     pub symbol: String,
     #[structopt(short, long, default_value = "2", help = "Verbosity level from 0 to 5")]
     pub verbose: u8,

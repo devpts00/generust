@@ -1,13 +1,13 @@
 #![feature(try_trait)]
 
 mod generust;
-mod options;
 mod logger;
+mod options;
 
-use std::io::{BufWriter, Write};
+use crate::generust::{GrError, GrResult, Parser};
 use options::Options;
+use std::io::{BufWriter, Write};
 use structopt::StructOpt;
-use crate::generust::{Parser, GrError, GrResult};
 
 fn quit<T>(code: Option<i32>) -> T {
     std::process::exit(code.unwrap_or_else(|| 1));
@@ -43,12 +43,11 @@ fn run(opts: Options) -> GrResult<()> {
 }
 
 fn main() {
-
     let opts: Options = Options::from_args();
 
     match logger::setup(opts.verbose) {
         Ok(()) => log::debug!("logger is successfully initialized"),
-        Err(e) => panic!("failed to initalize logger: {}", e)
+        Err(e) => panic!("failed to initalize logger: {}", e),
     }
 
     log::info!("template file: {}", opts.template);
@@ -57,13 +56,12 @@ fn main() {
     log::info!("macro symbol: {}", opts.symbol);
 
     match run(opts) {
-        Ok(_) => {
-        },
+        Ok(_) => {}
         Err(err) => {
             log::error!("{}", err);
             match err {
                 GrError::Io(err) => quit(err.raw_os_error()),
-                _ => quit(None)
+                _ => quit(None),
             }
         }
     }

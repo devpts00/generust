@@ -1,10 +1,10 @@
 clean:
 	cargo clean
 
-check:
+check: format
 	cargo check
 
-build:
+build: format
 	cargo build
 
 release:
@@ -13,7 +13,7 @@ release:
 test:
 	cargo test -- --nocapture
 
-run:
+run: build
 	cargo run -- -c 1000 -t template.txt -o output.dat -v 3
 
 run-stress: release
@@ -21,3 +21,6 @@ run-stress: release
 
 help:
 	cargo run -- --help
+
+format:
+	cargo fmt

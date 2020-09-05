@@ -4,14 +4,13 @@ use log::LevelFilter;
 use std::cmp::min;
 
 pub fn setup(verbose: u8) -> result::Result<(), fern::InitError> {
-
     let levels = vec![
         LevelFilter::Off,
         LevelFilter::Error,
         LevelFilter::Warn,
         LevelFilter::Info,
         LevelFilter::Debug,
-        LevelFilter::Trace
+        LevelFilter::Trace,
     ];
 
     let level = levels[min(verbose as usize, levels.len() - 1usize)];

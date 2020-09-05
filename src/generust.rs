@@ -24,7 +24,7 @@ impl Display for GrError {
             GrError::Regex(err) => Display::fmt(err, f),
             GrError::Glob(err) => Display::fmt(err, f),
             GrError::Pattern(err) => Display::fmt(err, f),
-            GrError::None(err) => Debug::fmt(err, f)
+            GrError::None(err) => Debug::fmt(err, f),
         }
     }
 }
@@ -66,7 +66,7 @@ pub trait Generust {
 }
 
 struct Text {
-    text: String
+    text: String,
 }
 
 impl Generust for Text {
@@ -85,12 +85,13 @@ impl Generust for Uuid4 {
 
 struct Integer {
     min: i64,
-    max: i64
+    max: i64,
 }
 
 impl Generust for Integer {
     fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
-        Ok(write!(w, "{}", rand::thread_rng().gen_range(self.min, self.max))?)
+        let mut rng = rand::thread_rng();
+        Ok(write!(w, "{}", rng.gen_range(self.min, self.max))?)
     }
 }
 
@@ -116,12 +117,13 @@ impl Generust for Timestamp {
 }
 
 struct Choice {
-    vars: Vec<String>
+    vars: Vec<String>,
 }
 
 impl Generust for Choice {
     fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
-        let i = rand::thread_rng().gen_range(0, self.vars.len());
+        let mut rng = rand::thread_rng();
+        let i = rng.gen_range(0, self.vars.len());
         Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
     }
 }
@@ -139,7 +141,8 @@ impl Generust for Phone {
 }
 
 fn random_line(data: &[u8]) -> &[u8] {
-    let offset = rand::thread_rng().gen_range(0, data.len());
+    let mut rng = rand::thread_rng();
+    let offset = rng.gen_range(0, data.len());
     let mut start = offset;
     while start > 0 && data[start - 1] != b'\n' {
         start -= 1;
@@ -151,18 +154,18 @@ fn random_line(data: &[u8]) -> &[u8] {
     &data[start..end]
 }
 
-struct Lines {
-    bytes: &'static [u8]
+struct MemLines<'a> {
+    bytes: &'a [u8],
 }
 
-impl Generust for Lines {
+impl<'a> Generust for MemLines<'a> {
     fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
         Ok(w.write(random_line(self.bytes)).map(|_| ())?)
     }
 }
 
 struct MmapFile {
-    mem: Mmap
+    mem: Mmap,
 }
 
 impl Generust for MmapFile {
@@ -172,7 +175,7 @@ impl Generust for MmapFile {
 }
 
 pub struct Composite {
-    generusts: Vec<Box<dyn Generust>>
+    generusts: Vec<Box<dyn Generust>>,
 }
 
 impl Generust for Composite {
@@ -194,17 +197,20 @@ pub struct Parser {
     by_domain: &'static [u8],
 }
 
-impl Parser {
+static BYTES_FIRST: &[u8] = include_bytes!("../dat/first.csv");
+static BYTES_LAST: &[u8] = include_bytes!("../dat/last.csv");
+static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domain.csv");
 
+impl Parser {
     pub fn new(symbol: &str) -> GrResult<Parser> {
         let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
         let rx_template = Regex::new(txt)?;
         let rx_choice = Regex::new(r"^CHOICE\((.+)\)$")?;
         let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$")?;
         let rx_file = Regex::new(r"^FILE\((.+)\)$")?;
-        let by_first = include_bytes!("../dat/first.csv");
-        let by_last = include_bytes!("../dat/last.csv");
-        let by_domain = include_bytes!("../dat/domain.csv");
+        let by_first = BYTES_FIRST;
+        let by_last = BYTES_LAST;
+        let by_domain = BYTES_DOMAIN;
 
         Ok(Parser {
             rx_template,
@@ -213,7 +219,7 @@ impl Parser {
             rx_file,
             by_first,
             by_last,
-            by_domain
+            by_domain,
         })
     }
 
@@ -222,7 +228,9 @@ impl Parser {
     }
 
     fn parse_text(&self, text: &str) -> Box<dyn Generust> {
-        Box::new(Text { text: String::from(text) })
+        Box::new(Text {
+            text: String::from(text),
+        })
     }
 
     fn parse_macro(&self, text: &str) -> GrResult<Box<dyn Generust>> {
@@ -235,15 +243,25 @@ impl Parser {
         } else if text.eq("PHONE") {
             Ok(Box::new(Phone {}))
         } else if text.eq("BOOLEAN") {
-            Ok(Box::new(Choice { vars: vec![String::from("true"), String::from("false")] }))
+            Ok(Box::new(Choice {
+                vars: vec![String::from("true"), String::from("false")],
+            }))
         } else if text.eq("GENDER") {
-            Ok(Box::new(Choice { vars: vec![String::from("Male"), String::from("Female")] }))
+            Ok(Box::new(Choice {
+                vars: vec![String::from("Male"), String::from("Female")],
+            }))
         } else if text.eq("FIRST") {
-            Ok(Box::new(Lines { bytes: self.by_first }))
+            Ok(Box::new(MemLines {
+                bytes: self.by_first,
+            }))
         } else if text.eq("LAST") {
-            Ok(Box::new(Lines { bytes: self.by_last }))
+            Ok(Box::new(MemLines {
+                bytes: self.by_last,
+            }))
         } else if text.eq("DOMAIN") {
-            Ok(Box::new(Lines { bytes: self.by_domain }))
+            Ok(Box::new(MemLines {
+                bytes: self.by_domain,
+            }))
         } else if text.eq("TIMEZONE") {
             let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
             //let tzs = glob::glob("/root/**/*").unwrap();
@@ -267,10 +285,10 @@ impl Parser {
                 for line in BufReader::new(file).lines() {
                     vs.push(line?);
                 }
-                Ok(Box::new(Choice{vars: vs}))
+                Ok(Box::new(Choice { vars: vs }))
             } else {
                 let mmap = unsafe { MmapOptions::new().map(&file)? };
-                Ok(Box::new(MmapFile{ mem: mmap }))
+                Ok(Box::new(MmapFile { mem: mmap }))
             }
         } else if let Some(cap) = self.rx_choice.captures(text) {
             let mut vs = vec![];
@@ -295,13 +313,12 @@ impl Parser {
         let mut gs: Vec<Box<dyn Generust>> = vec![];
         let mut start = 0;
         for cap in self.rx_template.captures_iter(template) {
-
             let outer = cap.get(1).unwrap();
             let inner = cap.get(2).unwrap();
 
             // Text
             if outer.start() > start {
-                gs.push(self.parse_text(&template[start .. outer.start()]))
+                gs.push(self.parse_text(&template[start..outer.start()]))
             }
 
             // Generust
@@ -345,7 +362,7 @@ mod test {
         let text = "hello";
         let mut buf = buf(10);
         let g = parser().parse_text(text);
-        assert!(g.generate(& mut buf).is_ok());
+        assert!(g.generate(&mut buf).is_ok());
         let str = str(buf);
         assert_eq!(text, str);
     }
@@ -417,8 +434,10 @@ mod test {
 
     #[test]
     fn test_composite() {
-        let g = parser().parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}").unwrap();
+        let g = parser()
+            .parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}")
+            .unwrap();
         let mut buf = buf(128);
-        assert!(g.generate(& mut buf).is_ok());
+        assert!(g.generate(&mut buf).is_ok());
     }
 }
