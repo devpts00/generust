@@ -2,7 +2,6 @@ use std::fmt::{Debug, Display, Formatter, Result};
 use std::io::{BufRead, BufReader, Write};
 use std::option::NoneError;
 
-use glob;
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
@@ -292,7 +291,7 @@ impl Parser {
             }
         } else if let Some(cap) = self.rx_choice.captures(text) {
             let mut vs = vec![];
-            for v in cap.get(1).unwrap().as_str().split(",") {
+            for v in cap.get(1).unwrap().as_str().split(',') {
                 let tv = v.trim();
                 if !tv.is_empty() {
                     vs.push(String::from(tv));

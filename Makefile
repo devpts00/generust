@@ -1,13 +1,13 @@
 clean:
 	cargo clean
 
-check: format
+check: format clippy
 	cargo check
 
-build: format
+build: format clippy
 	cargo build
 
-release:
+release: format clippy
 	cargo build --release
 
 test:
@@ -24,3 +24,6 @@ help:
 
 format:
 	cargo fmt
+
+clippy:
+	cargo clippy
