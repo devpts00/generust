@@ -1,6 +1,6 @@
-use std::fmt::{Debug, Display, Formatter, Result};
+use std::fmt::{Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Write};
-use std::option::NoneError;
+use std::option;
 
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
@@ -8,60 +8,60 @@ use regex::Regex;
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub enum GrError {
+pub enum Error {
     Io(std::io::Error),
     Regex(regex::Error),
     Glob(glob::GlobError),
     Pattern(glob::PatternError),
-    None(NoneError),
+    None(option::NoneError),
 }
 
-impl Display for GrError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            GrError::Io(err) => Display::fmt(err, f),
-            GrError::Regex(err) => Display::fmt(err, f),
-            GrError::Glob(err) => Display::fmt(err, f),
-            GrError::Pattern(err) => Display::fmt(err, f),
-            GrError::None(err) => Debug::fmt(err, f),
+            Error::Io(err) => Display::fmt(err, f),
+            Error::Regex(err) => Display::fmt(err, f),
+            Error::Glob(err) => Display::fmt(err, f),
+            Error::Pattern(err) => Display::fmt(err, f),
+            Error::None(err) => Debug::fmt(err, f),
         }
     }
 }
 
-impl From<std::io::Error> for GrError {
+impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
-        GrError::Io(err)
+        Error::Io(err)
     }
 }
 
-impl From<regex::Error> for GrError {
+impl From<regex::Error> for Error {
     fn from(err: regex::Error) -> Self {
-        GrError::Regex(err)
+        Error::Regex(err)
     }
 }
 
-impl From<glob::GlobError> for GrError {
+impl From<glob::GlobError> for Error {
     fn from(err: glob::GlobError) -> Self {
-        GrError::Glob(err)
+        Error::Glob(err)
     }
 }
 
-impl From<glob::PatternError> for GrError {
+impl From<glob::PatternError> for Error {
     fn from(err: glob::PatternError) -> Self {
-        GrError::Pattern(err)
+        Error::Pattern(err)
     }
 }
 
-impl From<NoneError> for GrError {
-    fn from(err: NoneError) -> Self {
-        GrError::None(err)
+impl From<option::NoneError> for Error {
+    fn from(err: option::NoneError) -> Self {
+        Error::None(err)
     }
 }
 
-pub type GrResult<T> = std::result::Result<T, GrError>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Generust {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()>;
+    fn generate(&self, w: &mut dyn Write) -> Result<()>;
 }
 
 struct Text {
@@ -69,7 +69,7 @@ struct Text {
 }
 
 impl Generust for Text {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(self.text.as_bytes()).map(|_| ())?)
     }
 }
@@ -77,7 +77,7 @@ impl Generust for Text {
 struct Uuid4;
 
 impl Generust for Uuid4 {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", Uuid::new_v4())?)
     }
 }
@@ -88,7 +88,7 @@ struct Integer {
 }
 
 impl Generust for Integer {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         Ok(write!(w, "{}", rng.gen_range(self.min, self.max))?)
     }
@@ -97,7 +97,7 @@ impl Generust for Integer {
 struct IpAddress;
 
 impl Generust for IpAddress {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
         let b2 = rng.gen_range(1, 255);
@@ -110,7 +110,7 @@ impl Generust for IpAddress {
 struct Timestamp;
 
 impl Generust for Timestamp {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", chrono::Utc::now().format("%+"))?)
     }
 }
@@ -120,7 +120,7 @@ struct Choice {
 }
 
 impl Generust for Choice {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let i = rng.gen_range(0, self.vars.len());
         Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
@@ -130,7 +130,7 @@ impl Generust for Choice {
 struct Phone;
 
 impl Generust for Phone {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let x1 = rng.gen_range(1, 1000);
         let x2 = rng.gen_range(1, 1000);
@@ -158,7 +158,7 @@ struct MemLines<'a> {
 }
 
 impl<'a> Generust for MemLines<'a> {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(self.bytes)).map(|_| ())?)
     }
 }
@@ -168,7 +168,7 @@ struct MmapFile {
 }
 
 impl Generust for MmapFile {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(&self.mem)).map(|_| ())?)
     }
 }
@@ -178,7 +178,7 @@ pub struct Composite {
 }
 
 impl Generust for Composite {
-    fn generate(&self, w: &mut dyn Write) -> GrResult<()> {
+    fn generate(&self, w: &mut dyn Write) -> Result<()> {
         for g in &self.generusts {
             g.generate(w)?;
         }
@@ -201,7 +201,7 @@ static BYTES_LAST: &[u8] = include_bytes!("../dat/last.csv");
 static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domain.csv");
 
 impl Parser {
-    pub fn new(symbol: &str) -> GrResult<Parser> {
+    pub fn new(symbol: &str) -> Result<Parser> {
         let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
         let rx_template = Regex::new(txt)?;
         let rx_choice = Regex::new(r"^CHOICE\((.+)\)$")?;
@@ -222,7 +222,7 @@ impl Parser {
         })
     }
 
-    pub fn parse(&self, template: &str) -> GrResult<Box<dyn Generust>> {
+    pub fn parse(&self, template: &str) -> Result<Box<dyn Generust>> {
         self.parse_template(template)
     }
 
@@ -232,7 +232,7 @@ impl Parser {
         })
     }
 
-    fn parse_macro(&self, text: &str) -> GrResult<Box<dyn Generust>> {
+    fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
         if text.eq("UUID") {
             Ok(Box::new(Uuid4 {}))
         } else if text.eq("IPADDRESS") {
@@ -308,7 +308,7 @@ impl Parser {
         }
     }
 
-    fn parse_template(&self, template: &str) -> GrResult<Box<dyn Generust>> {
+    fn parse_template(&self, template: &str) -> Result<Box<dyn Generust>> {
         let mut gs: Vec<Box<dyn Generust>> = vec![];
         let mut start = 0;
         for cap in self.rx_template.captures_iter(template) {

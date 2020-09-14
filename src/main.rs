@@ -4,7 +4,7 @@ mod generust;
 mod logger;
 mod options;
 
-use crate::generust::{GrError, GrResult, Parser};
+use crate::generust::{Error, Parser, Result};
 use options::Options;
 use std::io::{BufWriter, Write};
 use structopt::StructOpt;
@@ -13,7 +13,7 @@ fn quit<T>(code: Option<i32>) -> T {
     std::process::exit(code.unwrap_or_else(|| 1));
 }
 
-fn run(opts: Options) -> GrResult<()> {
+fn run(opts: Options) -> Result<()> {
     log::info!("read a template from '{}'", &opts.template);
     let template = std::fs::read_to_string(&opts.template)?;
 
@@ -60,7 +60,7 @@ fn main() {
         Err(err) => {
             log::error!("{}", err);
             match err {
-                GrError::Io(err) => quit(err.raw_os_error()),
+                Error::Io(err) => quit(err.raw_os_error()),
                 _ => quit(None),
             }
         }
