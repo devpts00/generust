@@ -201,12 +201,14 @@ pub struct Parser {
     rx_file: Regex,
     by_first: &'static [u8],
     by_last: &'static [u8],
-    by_domain: &'static [u8],
+    by_domains: &'static [u8],
+    by_country_codes: &'static [u8],
 }
 
-static BYTES_FIRST: &[u8] = include_bytes!("../dat/first.csv");
-static BYTES_LAST: &[u8] = include_bytes!("../dat/last.csv");
-static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domain.csv");
+static BYTES_FIRST: &[u8] = include_bytes!("../dat/first");
+static BYTES_LAST: &[u8] = include_bytes!("../dat/last");
+static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domains");
+static BYTES_COUNTRY_CODES: &[u8] = include_bytes!("../dat/country_codes");
 
 impl Parser {
     pub fn new(symbol: &str) -> Result<Parser> {
@@ -217,7 +219,8 @@ impl Parser {
         let rx_file = Regex::new(r"^FILE\((.+)\)$")?;
         let by_first = BYTES_FIRST;
         let by_last = BYTES_LAST;
-        let by_domain = BYTES_DOMAIN;
+        let by_domains = BYTES_DOMAIN;
+        let by_country_codes = BYTES_COUNTRY_CODES;
 
         Ok(Parser {
             rx_template,
@@ -226,7 +229,8 @@ impl Parser {
             rx_file,
             by_first,
             by_last,
-            by_domain,
+            by_domains,
+            by_country_codes,
         })
     }
 
@@ -269,7 +273,11 @@ impl Parser {
             }))
         } else if text.eq("DOMAIN") {
             Ok(Box::new(MemLines {
-                bytes: self.by_domain,
+                bytes: self.by_domains,
+            }))
+        } else if text.eq("COUNTRY_CODE") {
+            Ok(Box::new(MemLines {
+                bytes: self.by_country_codes,
             }))
         } else if text.eq("TIMEZONE") {
             let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
