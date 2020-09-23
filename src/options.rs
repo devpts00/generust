@@ -6,7 +6,7 @@ pub struct Options {
     #[structopt(
         short,
         long,
-        default_value = "100",
+        default_value = "10",
         help = "Number of records to generate"
     )]
     pub count: u32,

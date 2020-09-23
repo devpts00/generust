@@ -14,7 +14,7 @@ test:
 	cargo test -- --nocapture
 
 run: build
-	cat template.txt | target/debug/generust -c 1000 -v 3 > output.dat
+	cat template.txt | target/debug/generust -c 3
 
 run-stress: release
 	cat template.txt | target/release/generust -c 1000000 -v 3 > output.dat

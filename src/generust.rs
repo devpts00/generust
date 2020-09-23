@@ -284,7 +284,7 @@ impl Parser {
             Ok(Box::new(Index {}))
         } else if text.eq("UUID") {
             Ok(Box::new(Uuid4 {}))
-        } else if text.eq("IPADDRESS") {
+        } else if text.eq("IPV4_ADDRESS") {
             Ok(Box::new(IpAddress {}))
         } else if text.eq("TIMESTAMP") {
             Ok(Box::new(Timestamp {}))
