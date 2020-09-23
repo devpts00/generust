@@ -19,6 +19,9 @@ run: build
 run-stress: release
 	cargo run --release -- -c 10000000 -t template.txt -o output.dat
 
+run-ucs: build
+	cargo run --release -- -c 1000000 -t ucs.template -o ucs.output -v 4
+
 help:
 	cargo run -- --help
 
