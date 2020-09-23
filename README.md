@@ -26,7 +26,7 @@ See the file `template.txt` for an example.
 - ${TIMESTAMP} - current timestamp in RFC-3339.
 - ${PHONE} - random phone number.
 - ${BOOLEAN} - true or false.
-- ${GENDER} - Male or Femaile.
+- ${GENDER} - Male or Female.
 - ${FIRST} - random first name from the fixed list.
 - ${LAST} - random last name from the fixed list.
 - ${DOMAIN} - random domain from the fixed list.
