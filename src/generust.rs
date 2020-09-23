@@ -61,7 +61,7 @@ impl From<option::NoneError> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Generust {
-    fn generate(&self, w: &mut dyn Write) -> Result<()>;
+    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()>;
 }
 
 struct Text {
@@ -69,15 +69,23 @@ struct Text {
 }
 
 impl Generust for Text {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(self.text.as_bytes()).map(|_| ())?)
+    }
+}
+
+struct Index;
+
+impl Generust for Index {
+    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
+        Ok(write!(w, "{}", i)?)
     }
 }
 
 struct Uuid4;
 
 impl Generust for Uuid4 {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", Uuid::new_v4())?)
     }
 }
@@ -88,7 +96,7 @@ struct Integer {
 }
 
 impl Generust for Integer {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         Ok(write!(w, "{}", rng.gen_range(self.min, self.max))?)
     }
@@ -97,7 +105,7 @@ impl Generust for Integer {
 struct IpAddress;
 
 impl Generust for IpAddress {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
         let b2 = rng.gen_range(1, 255);
@@ -110,7 +118,7 @@ impl Generust for IpAddress {
 struct Timestamp;
 
 impl Generust for Timestamp {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", chrono::Utc::now().format("%+"))?)
     }
 }
@@ -120,7 +128,7 @@ struct Choice {
 }
 
 impl Generust for Choice {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let i = rng.gen_range(0, self.vars.len());
         Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
@@ -130,7 +138,7 @@ impl Generust for Choice {
 struct Phone;
 
 impl Generust for Phone {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let x1 = rng.gen_range(1, 1000);
         let x2 = rng.gen_range(1, 1000);
@@ -158,7 +166,7 @@ struct MemLines<'a> {
 }
 
 impl<'a> Generust for MemLines<'a> {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(self.bytes)).map(|_| ())?)
     }
 }
@@ -168,7 +176,7 @@ struct MmapFile {
 }
 
 impl Generust for MmapFile {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(&self.mem)).map(|_| ())?)
     }
 }
@@ -178,9 +186,9 @@ pub struct Composite {
 }
 
 impl Generust for Composite {
-    fn generate(&self, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
         for g in &self.generusts {
-            g.generate(w)?;
+            g.generate(i, w)?;
         }
         Ok(w.write(b"\n").map(|_| ())?)
     }
@@ -233,7 +241,9 @@ impl Parser {
     }
 
     fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
-        if text.eq("UUID") {
+        if text.eq("INDEX") {
+            Ok(Box::new(Index {}))
+        } else if text.eq("UUID") {
             Ok(Box::new(Uuid4 {}))
         } else if text.eq("IPADDRESS") {
             Ok(Box::new(IpAddress {}))
@@ -361,7 +371,7 @@ mod test {
         let text = "hello";
         let mut buf = buf(10);
         let g = parser().parse_text(text);
-        assert!(g.generate(&mut buf).is_ok());
+        assert!(g.generate(0, &mut buf).is_ok());
         let str = str(buf);
         assert_eq!(text, str);
     }
@@ -369,8 +379,14 @@ mod test {
     fn test(name: &str) -> String {
         let mut buf = buf(128);
         let g = parser().parse_macro(name).ok().unwrap();
-        assert!(g.generate(&mut buf).is_ok());
+        assert!(g.generate(0, &mut buf).is_ok());
         str(buf)
+    }
+
+    #[test]
+    fn test_index() {
+        let str = test("INDEX");
+        assert!(str.parse::<u32>().is_ok())
     }
 
     #[test]
@@ -437,6 +453,6 @@ mod test {
             .parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}")
             .unwrap();
         let mut buf = buf(128);
-        assert!(g.generate(&mut buf).is_ok());
+        assert!(g.generate(0, &mut buf).is_ok());
     }
 }

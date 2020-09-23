@@ -30,7 +30,7 @@ fn run(opts: Options) -> Result<()> {
     log::info!("start data generation");
     let mut p = 0;
     for i in 0..opts.count {
-        generust.generate(&mut buffer)?;
+        generust.generate(i, &mut buffer)?;
         let n = 100 * i / opts.count;
         if n > p {
             p = n;
