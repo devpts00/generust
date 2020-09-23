@@ -98,7 +98,7 @@ struct Integer {
 impl Generust for Integer {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
-        Ok(write!(w, "{}", rng.gen_range(self.min, self.max))?)
+        Ok(write!(w, "{}", rng.gen_range(self.min, self.max + 1))?)
     }
 }
 
