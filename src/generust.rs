@@ -1,7 +1,9 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Write};
+use std::num::ParseIntError;
 use std::option;
 
+use chrono::{NaiveDate, NaiveDateTime, ParseError};
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
@@ -14,6 +16,8 @@ pub enum Error {
     Glob(glob::GlobError),
     Pattern(glob::PatternError),
     None(option::NoneError),
+    ParseInt(ParseIntError),
+    ParseChrono(chrono::ParseError),
 }
 
 impl Display for Error {
@@ -24,6 +28,8 @@ impl Display for Error {
             Error::Glob(err) => Display::fmt(err, f),
             Error::Pattern(err) => Display::fmt(err, f),
             Error::None(err) => Debug::fmt(err, f),
+            Error::ParseChrono(err) => Display::fmt(err, f),
+            Error::ParseInt(err) => Display::fmt(err, f),
         }
     }
 }
@@ -58,6 +64,18 @@ impl From<option::NoneError> for Error {
     }
 }
 
+impl From<chrono::ParseError> for Error {
+    fn from(err: ParseError) -> Self {
+        Error::ParseChrono(err)
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(err: ParseIntError) -> Self {
+        Error::ParseInt(err)
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Generust {
@@ -79,6 +97,20 @@ struct Index;
 impl Generust for Index {
     fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", i)?)
+    }
+}
+
+struct DateRange {
+    min: i64,
+    max: i64,
+}
+
+impl Generust for DateRange {
+    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+        let mut rng = rand::thread_rng();
+        let ts = rng.gen_range(self.min, self.max + 1);
+        let date = NaiveDateTime::from_timestamp(ts, 0).date();
+        Ok(write!(w, "{}", date)?)
     }
 }
 
@@ -198,6 +230,7 @@ pub struct Parser {
     rx_template: Regex,
     rx_choice: Regex,
     rx_integer: Regex,
+    rx_date_range: Regex,
     rx_file: Regex,
     by_first: &'static [u8],
     by_last: &'static [u8],
@@ -216,6 +249,7 @@ impl Parser {
         let rx_template = Regex::new(txt)?;
         let rx_choice = Regex::new(r"^CHOICE\((.+)\)$")?;
         let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$")?;
+        let rx_date_range = Regex::new(r"DATE\((.{10}),(.{10})\)")?;
         let rx_file = Regex::new(r"^FILE\((.+)\)$")?;
         let by_first = BYTES_FIRST;
         let by_last = BYTES_LAST;
@@ -226,6 +260,7 @@ impl Parser {
             rx_template,
             rx_choice,
             rx_integer,
+            rx_date_range,
             rx_file,
             by_first,
             by_last,
@@ -317,9 +352,15 @@ impl Parser {
             }
             Ok(Box::new(Choice { vars: vs }))
         } else if let Some(cap) = self.rx_integer.captures(text) {
-            Ok(Box::new(Integer {
-                min: cap.get(1).unwrap().as_str().parse::<i64>().unwrap(),
-                max: cap.get(2).unwrap().as_str().parse::<i64>().unwrap(),
+            let min = cap.get(1).unwrap().as_str().parse::<i64>()?;
+            let max = cap.get(2).unwrap().as_str().parse::<i64>()?;
+            Ok(Box::new(Integer { min, max }))
+        } else if let Some(cap) = self.rx_date_range.captures(text) {
+            let min = cap.get(1).unwrap().as_str().parse::<NaiveDate>()?;
+            let max = cap.get(2).unwrap().as_str().parse::<NaiveDate>()?;
+            Ok(Box::new(DateRange {
+                min: min.and_hms(0, 0, 0).timestamp(),
+                max: max.and_hms(0, 0, 0).timestamp(),
             }))
         } else {
             Ok(self.parse_text(text))
