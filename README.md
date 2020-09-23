@@ -4,6 +4,10 @@
 
 Straightforward data generator tool. Consumes a template string with macros that generate random data. Rest of the string goes to the output as is. That allows constructing pretty much any new line separated text. 
 
+## Build
+
+You will need a nightly toolchain. Then just see the `Makefile`. 
+
 ## Usage
 
 ```
