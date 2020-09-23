@@ -1,44 +1,42 @@
 #![feature(try_trait)]
 
+use std::io::{BufWriter, Read, Write};
+
+use structopt::StructOpt;
+
+use options::Options;
+
+use crate::generust::{Error, Parser, Result};
+
 mod generust;
 mod logger;
 mod options;
-
-use crate::generust::{Error, Parser, Result};
-use options::Options;
-use std::io::{BufWriter, Write};
-use structopt::StructOpt;
 
 fn quit<T>(code: Option<i32>) -> T {
     std::process::exit(code.unwrap_or_else(|| 1));
 }
 
 fn run(opts: Options) -> Result<()> {
-    log::info!("read a template from '{}'", &opts.template);
-    let template = std::fs::read_to_string(&opts.template)?;
+    log::debug!("read template");
+    let mut template = String::new();
+    std::io::stdin().lock().read_to_string(&mut template)?;
 
-    log::info!("create an output file '{}'", &opts.output);
-    let output = std::fs::File::create(&opts.output)?;
-    let mut buffer = BufWriter::new(output);
-
-    log::info!("create template parser");
+    log::debug!("parse template");
     let parser = Parser::new(&opts.symbol)?;
-
-    log::info!("parse the template");
     let generust = parser.parse(&template)?;
 
-    log::info!("start data generation");
+    let stdout = std::io::stdout();
+    let output = stdout.lock();
+    let mut buffer = BufWriter::new(output);
     let mut p = 0;
     for i in 0..opts.count {
         generust.generate(i, &mut buffer)?;
         let n = 100 * i as u64 / opts.count as u64;
         if n > p {
             p = n;
-            log::debug!("{}%", p);
+            log::debug!("progress: {}%", p);
         }
     }
-
-    log::info!("finish data generation");
     Ok(buffer.flush()?)
 }
 
@@ -50,10 +48,9 @@ fn main() {
         Err(e) => panic!("failed to initalize logger: {}", e),
     }
 
-    log::info!("template file: {}", opts.template);
-    log::info!("output file: {}", opts.output);
     log::info!("line count: {}", opts.count);
     log::info!("macro symbol: {}", opts.symbol);
+    log::info!("verbose level: {}", opts.verbose);
 
     match run(opts) {
         Ok(_) => {}

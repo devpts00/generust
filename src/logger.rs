@@ -32,7 +32,7 @@ pub fn setup(verbose: u8) -> result::Result<(), fern::InitError> {
             ))
         })
         .level(level)
-        .chain(std::io::stdout())
+        .chain(std::io::stderr())
         .apply()
         .map_err(fern::InitError::SetLoggerError)
 }
