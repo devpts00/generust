@@ -35,4 +35,4 @@ See the file `template.txt` for an example.
 - ${FILE(file.txt)} - random line from text file. The files should fit in RAM to keep it fast. 
 - ${CHOICE(one,two,three)} - random item from the specified list.
 - ${INTEGER(1,9)} - random integer from the specified interval.
-- ${DATE_RANGE(2010-01-01,2020-02-02)} - random date from the specified range.
+- ${DATE(2010-01-01,2020-02-02)} - random date from the specified range.
