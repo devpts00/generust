@@ -103,22 +103,22 @@ impl Generust for Text {
     }
 }
 
-struct Index {
+struct RecNum {
     start: i32,
 }
 
-impl Index {
+impl RecNum {
     fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
         let start: i32 = match args.len() {
             0 => 0,
             1 => args[0].parse::<i32>()?,
             _ => return Err(Error::Macro("INDEX - too many arguments".to_string())),
         };
-        Ok(Box::new(Index { start }))
+        Ok(Box::new(RecNum { start }))
     }
 }
 
-impl Generust for Index {
+impl Generust for RecNum {
     fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", self.start + i as i32)?)
     }
@@ -167,26 +167,51 @@ impl Generust for Uuid4 {
     }
 }
 
-struct Integer {
-    min: i64,
-    max: i64,
+struct IntSeq {
+    start: i32,
+    end: i32,
 }
 
-impl Integer {
+impl IntSeq {
     fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
-        let (min, max) = match args.len() {
-            0 => (std::i64::MIN, std::i64::MAX),
-            1 => (0, args[0].parse::<i64>()?),
-            _ => (args[0].parse::<i64>()?, args[1].parse::<i64>()?),
+        let (start, end) = match args.len() {
+            0 => (0, std::i32::MAX),
+            1 => (0, args[0].parse()?),
+            2 => (args[0].parse()?, args[1].parse()?),
+            _ => return Err(Error::Macro("INT_SEQ - too many arguments".to_string())),
         };
-        Ok(Box::new(Integer { min, max }))
+        Ok(Box::new(IntSeq { start, end }))
     }
 }
 
-impl Generust for Integer {
+impl Generust for IntSeq {
+    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
+        let o = (i as i64) % (self.end as i64 - self.start as i64);
+        Ok(write!(w, "{}", self.start as i64 + o)?)
+    }
+}
+
+struct IntRnd {
+    start: i32,
+    end: i32,
+}
+
+impl IntRnd {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        let (start, end) = match args.len() {
+            0 => (0, std::i32::MAX),
+            1 => (0, args[0].parse()?),
+            2 => (args[0].parse()?, args[1].parse()?),
+            _ => return Err(Error::Macro("INT_RND - too many arguments".to_string())),
+        };
+        Ok(Box::new(IntRnd { start, end }))
+    }
+}
+
+impl Generust for IntRnd {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
-        Ok(write!(w, "{}", rng.gen_range(self.min, self.max + 1))?)
+        Ok(write!(w, "{}", rng.gen_range(self.start, self.end))?)
     }
 }
 
@@ -375,10 +400,11 @@ impl Parser {
 
         let mut mc_factories = HashMap::new();
 
-        reg(&mut mc_factories, "INDEX", Index::create);
+        reg(&mut mc_factories, "REC_NUM", RecNum::create);
+        reg(&mut mc_factories, "INT_SEQ", IntSeq::create);
+        reg(&mut mc_factories, "INT_RND", IntRnd::create);
         reg(&mut mc_factories, "DATE", DateRnd::create);
         reg(&mut mc_factories, "UUID4", Uuid4::create);
-        reg(&mut mc_factories, "INTEGER", Integer::create);
         reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
         reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);
         reg(&mut mc_factories, "CHOICE", Choice::create);

@@ -22,6 +22,9 @@ run-stress: release
 run-ucs: #release
 	cat ucs.template | target/release/generust -c 1000000 -v 4 > ucs.output
 
+run-test: release
+	cat test.template | target/release/generust -c 10
+
 help:
 	cargo run -- --help
 
