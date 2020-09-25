@@ -358,28 +358,29 @@ impl Parser {
     pub fn new(symbol: &str) -> Result<Parser> {
         let rx_template = Regex::new(&format!("({}{})", symbol, r"\{([^}]+)}"))?;
         let rx_macro = Regex::new(r"(^.+)\((.*)\)")?;
+
+        fn reg(fs: &mut HashMap<String, MacroFactory>, name: &str, f: MacroFactory) {
+            fs.insert(name.to_string(), f);
+        }
+
         let mut mc_factories = HashMap::new();
-        mc_factories.insert("INDEX".to_string(), Index::create as MacroFactory);
-        mc_factories.insert("DATE".to_string(), DateRnd::create as MacroFactory);
-        mc_factories.insert("UUID4".to_string(), Uuid4::create as MacroFactory);
-        mc_factories.insert("INTEGER".to_string(), Integer::create as MacroFactory);
-        mc_factories.insert(
-            "IPV4_ADDRESS".to_string(),
-            IpV4Address::create as MacroFactory,
-        );
-        mc_factories.insert("TIMESTAMP".to_string(), Timestamp::create as MacroFactory);
-        mc_factories.insert("CHOICE".to_string(), Choice::create as MacroFactory);
-        mc_factories.insert("PHONE".to_string(), Phone::create as MacroFactory);
-        mc_factories.insert("FILE".to_string(), MmapFile::create as MacroFactory);
-        mc_factories.insert("FIRST".to_string(), MemLines::create_first as MacroFactory);
-        mc_factories.insert("LAST".to_string(), MemLines::create_last as MacroFactory);
-        mc_factories.insert(
-            "DOMAIN".to_string(),
-            MemLines::create_domain as MacroFactory,
-        );
-        mc_factories.insert(
-            "COUNTRY_CODE".to_string(),
-            MemLines::create_country_codes as MacroFactory,
+
+        reg(&mut mc_factories, "INDEX", Index::create);
+        reg(&mut mc_factories, "DATE", DateRnd::create);
+        reg(&mut mc_factories, "UUID4", Uuid4::create);
+        reg(&mut mc_factories, "INTEGER", Integer::create);
+        reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
+        reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);
+        reg(&mut mc_factories, "CHOICE", Choice::create);
+        reg(&mut mc_factories, "PHONE", Phone::create);
+        reg(&mut mc_factories, "FILE", MmapFile::create);
+        reg(&mut mc_factories, "FIRST", MemLines::create_first);
+        reg(&mut mc_factories, "LAST", MemLines::create_last);
+        reg(&mut mc_factories, "DOMAIN", MemLines::create_domain);
+        reg(
+            &mut mc_factories,
+            "COUNTRY_CODE",
+            MemLines::create_country_codes,
         );
 
         Ok(Parser {
@@ -398,96 +399,6 @@ impl Parser {
             text: String::from(text),
         })
     }
-
-    /*
-    fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
-        if text.eq("INDEX") {
-            Ok(Box::new(Index {}))
-        } else if text.eq("UUID") {
-            Ok(Box::new(Uuid4 {}))
-        } else if text.eq("IPV4_ADDRESS") {
-            Ok(Box::new(IpV4Address {}))
-        } else if text.eq("TIMESTAMP") {
-            Ok(Box::new(Timestamp {}))
-        } else if text.eq("PHONE") {
-            Ok(Box::new(Phone {}))
-        } else if text.eq("BOOLEAN") {
-            Ok(Box::new(Choice {
-                vars: vec![String::from("true"), String::from("false")],
-            }))
-        } else if text.eq("GENDER") {
-            Ok(Box::new(Choice {
-                vars: vec![String::from("Male"), String::from("Female")],
-            }))
-        } else if text.eq("FIRST") {
-            Ok(Box::new(MemLines {
-                bytes: self.by_first,
-            }))
-        } else if text.eq("LAST") {
-            Ok(Box::new(MemLines {
-                bytes: self.by_last,
-            }))
-        } else if text.eq("DOMAIN") {
-            Ok(Box::new(MemLines {
-                bytes: self.by_domains,
-            }))
-        } else if text.eq("COUNTRY_CODE") {
-            Ok(Box::new(MemLines {
-                bytes: self.by_country_codes,
-            }))
-        } else if text.eq("TIMEZONE") {
-            let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
-            //let tzs = glob::glob("/root/**/*").unwrap();
-            let mut vs = vec![];
-            for tz in tzs {
-                let path = tz?;
-                if path.is_file() {
-                    if let Some(name) = path.file_name() {
-                        vs.push(name.to_os_string().into_string().unwrap())
-                    }
-                }
-            }
-            Ok(Box::new(Choice { vars: vs }))
-        } else if let Some(cap) = self.rx_file.captures(text) {
-            let mut vs = vec![];
-
-            let name = cap.get(1)?.as_str().trim();
-            let meta = std::fs::metadata(name)?;
-            let file = std::fs::File::open(name)?;
-            if meta.len() < 8 * 1024 {
-                for line in BufReader::new(file).lines() {
-                    vs.push(line?);
-                }
-                Ok(Box::new(Choice { vars: vs }))
-            } else {
-                let mmap = unsafe { MmapOptions::new().map(&file)? };
-                Ok(Box::new(MmapFile { mem: mmap }))
-            }
-        } else if let Some(cap) = self.rx_choice.captures(text) {
-            let mut vs = vec![];
-            for v in cap.get(1).unwrap().as_str().split(',') {
-                let tv = v.trim();
-                if !tv.is_empty() {
-                    vs.push(String::from(tv));
-                }
-            }
-            Ok(Box::new(Choice { vars: vs }))
-        } else if let Some(cap) = self.rx_integer.captures(text) {
-            let min = cap.get(1).unwrap().as_str().parse::<i64>()?;
-            let max = cap.get(2).unwrap().as_str().parse::<i64>()?;
-            Ok(Box::new(Integer { min, max }))
-        } else if let Some(cap) = self.rx_date_range.captures(text) {
-            let min = cap.get(1).unwrap().as_str().parse::<NaiveDate>()?;
-            let max = cap.get(2).unwrap().as_str().parse::<NaiveDate>()?;
-            Ok(Box::new(DateRnd {
-                min: min.and_hms(0, 0, 0).timestamp(),
-                max: max.and_hms(0, 0, 0).timestamp(),
-            }))
-        } else {
-            Ok(self.parse_text(text))
-        }
-    }
-     */
 
     fn parse_macro2(&self, text: &str) -> Result<Box<dyn Generust>> {
         let (name, args) = match self.rx_macro.captures(text) {
