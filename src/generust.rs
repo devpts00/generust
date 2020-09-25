@@ -235,6 +235,16 @@ impl Choice {
         let vars = args.iter().map(|v| v.to_string()).collect::<Vec<String>>();
         Ok(Box::new(Choice { vars }))
     }
+    fn create_boolean(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(Choice {
+            vars: vec!["true".to_string(), "false".to_string()],
+        }))
+    }
+    fn create_gender(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(Choice {
+            vars: vec!["Male".to_string(), "Female".to_string()],
+        }))
+    }
 }
 
 impl Generust for Choice {
@@ -372,6 +382,8 @@ impl Parser {
         reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
         reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);
         reg(&mut mc_factories, "CHOICE", Choice::create);
+        reg(&mut mc_factories, "BOOLEAN", Choice::create_boolean);
+        reg(&mut mc_factories, "GENDER", Choice::create_gender);
         reg(&mut mc_factories, "PHONE", Phone::create);
         reg(&mut mc_factories, "FILE", MmapFile::create);
         reg(&mut mc_factories, "FIRST", MemLines::create_first);
