@@ -1,7 +1,7 @@
 clean:
 	cargo clean
 
-check: format clippy
+check: format
 	cargo check
 
 build: format clippy
@@ -14,7 +14,7 @@ test:
 	cargo test -- --nocapture
 
 run: build
-	cat template.txt | target/debug/generust -c 3
+	cat template.txt | target/debug/generust -c 5
 
 run-stress: release
 	cat template.txt | target/release/generust -c 1000000 -v 3 > output.dat

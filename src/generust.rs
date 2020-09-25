@@ -270,6 +270,20 @@ impl Choice {
             vars: vec!["Male".to_string(), "Female".to_string()],
         }))
     }
+
+    fn create_time_zone(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
+        let mut vs = vec![];
+        for tz in tzs {
+            let path = tz?;
+            if path.is_file() {
+                if let Some(name) = path.file_name() {
+                    vs.push(name.to_os_string().into_string().unwrap())
+                }
+            }
+        }
+        Ok(Box::new(Choice { vars: vs }))
+    }
 }
 
 impl Generust for Choice {
@@ -408,6 +422,7 @@ impl Parser {
         reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
         reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);
         reg(&mut mc_factories, "CHOICE", Choice::create);
+        reg(&mut mc_factories, "TIME_ZONE", Choice::create_time_zone);
         reg(&mut mc_factories, "BOOLEAN", Choice::create_boolean);
         reg(&mut mc_factories, "GENDER", Choice::create_gender);
         reg(&mut mc_factories, "PHONE", Phone::create);
@@ -438,7 +453,7 @@ impl Parser {
         })
     }
 
-    fn parse_macro2(&self, text: &str) -> Result<Box<dyn Generust>> {
+    fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
         let (name, args) = match self.rx_macro.captures(text) {
             Some(cap) => {
                 let name = cap.get(1)?.as_str();
@@ -471,7 +486,7 @@ impl Parser {
             }
 
             // Generust
-            gs.push(self.parse_macro2(inner.as_str())?);
+            gs.push(self.parse_macro(inner.as_str())?);
 
             start = outer.end();
         }
