@@ -19,8 +19,8 @@ run: build
 run-stress: release
 	cat template.txt | target/release/generust -c 1000000 -v 3 > output.dat
 
-run-ucs: release
-	cat ucs.template | target/release/generust -c 100000000 -v 4 > ucs.output
+run-ucs: #release
+	cat ucs.template | target/release/generust -c 1000000 -v 4 > ucs.output
 
 help:
 	cargo run -- --help

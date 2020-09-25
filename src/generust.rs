@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::num::ParseIntError;
 use std::option;
 
-use chrono::{NaiveDate, NaiveDateTime, ParseError};
+use chrono::{Local, NaiveDate, NaiveDateTime, ParseError};
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
@@ -11,6 +12,7 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Error {
+    Macro(String),
     Io(std::io::Error),
     Regex(regex::Error),
     Glob(glob::GlobError),
@@ -23,6 +25,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Error::Macro(txt) => Display::fmt(txt, f),
             Error::Io(err) => Display::fmt(err, f),
             Error::Regex(err) => Display::fmt(err, f),
             Error::Glob(err) => Display::fmt(err, f),
@@ -86,26 +89,62 @@ struct Text {
     text: String,
 }
 
+impl Text {
+    fn parse(text: &str) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(Text {
+            text: String::from(text),
+        }))
+    }
+}
+
 impl Generust for Text {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(self.text.as_bytes()).map(|_| ())?)
     }
 }
 
-struct Index;
+struct Index {
+    start: i32,
+}
 
-impl Generust for Index {
-    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
-        Ok(write!(w, "{}", i)?)
+impl Index {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        let start: i32 = match args.len() {
+            0 => 0,
+            1 => args[0].parse::<i32>()?,
+            _ => return Err(Error::Macro("INDEX - too many arguments".to_string())),
+        };
+        Ok(Box::new(Index { start }))
     }
 }
 
-struct DateRange {
+impl Generust for Index {
+    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
+        Ok(write!(w, "{}", self.start + i as i32)?)
+    }
+}
+
+struct DateRnd {
     min: i64,
     max: i64,
 }
 
-impl Generust for DateRange {
+impl DateRnd {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        fn seconds(date: &str) -> Result<i64> {
+            Ok(date.parse::<NaiveDate>()?.and_hms(0, 0, 0).timestamp())
+        }
+        let now: i64 = Local::now().timestamp();
+        let (min, max) = match args.len() {
+            0 => (0, now),
+            1 => (seconds(args[0])?, now),
+            _ => (seconds(args[0])?, seconds(args[1])?),
+        };
+        Ok(Box::new(DateRnd { min, max }))
+    }
+}
+
+impl Generust for DateRnd {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let ts = rng.gen_range(self.min, self.max + 1);
@@ -115,6 +154,12 @@ impl Generust for DateRange {
 }
 
 struct Uuid4;
+
+impl Uuid4 {
+    fn create(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(Uuid4))
+    }
+}
 
 impl Generust for Uuid4 {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
@@ -127,6 +172,17 @@ struct Integer {
     max: i64,
 }
 
+impl Integer {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        let (min, max) = match args.len() {
+            0 => (std::i64::MIN, std::i64::MAX),
+            1 => (0, args[0].parse::<i64>()?),
+            _ => (args[0].parse::<i64>()?, args[1].parse::<i64>()?),
+        };
+        Ok(Box::new(Integer { min, max }))
+    }
+}
+
 impl Generust for Integer {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
@@ -134,9 +190,15 @@ impl Generust for Integer {
     }
 }
 
-struct IpAddress;
+struct IpV4Address;
 
-impl Generust for IpAddress {
+impl IpV4Address {
+    fn create(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(IpV4Address))
+    }
+}
+
+impl Generust for IpV4Address {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
@@ -149,6 +211,12 @@ impl Generust for IpAddress {
 
 struct Timestamp;
 
+impl Timestamp {
+    fn create(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(Timestamp))
+    }
+}
+
 impl Generust for Timestamp {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", chrono::Utc::now().format("%+"))?)
@@ -157,6 +225,16 @@ impl Generust for Timestamp {
 
 struct Choice {
     vars: Vec<String>,
+}
+
+impl Choice {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        if args.is_empty() {
+            return Err(Error::Macro("CHOICE - not enough arguments".to_string()));
+        }
+        let vars = args.iter().map(|v| v.to_string()).collect::<Vec<String>>();
+        Ok(Box::new(Choice { vars }))
+    }
 }
 
 impl Generust for Choice {
@@ -168,6 +246,12 @@ impl Generust for Choice {
 }
 
 struct Phone;
+
+impl Phone {
+    fn create(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(Phone))
+    }
+}
 
 impl Generust for Phone {
     fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
@@ -193,8 +277,32 @@ fn random_line(data: &[u8]) -> &[u8] {
     &data[start..end]
 }
 
+static BYTES_FIRST: &[u8] = include_bytes!("../dat/first");
+static BYTES_LAST: &[u8] = include_bytes!("../dat/last");
+static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domains");
+static BYTES_COUNTRY_CODES: &[u8] = include_bytes!("../dat/country_codes");
+
 struct MemLines<'a> {
     bytes: &'a [u8],
+}
+
+impl MemLines<'_> {
+    fn create_first(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(MemLines { bytes: BYTES_FIRST }))
+    }
+    fn create_last(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(MemLines { bytes: BYTES_LAST }))
+    }
+    fn create_domain(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(MemLines {
+            bytes: BYTES_DOMAIN,
+        }))
+    }
+    fn create_country_codes(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(MemLines {
+            bytes: BYTES_COUNTRY_CODES,
+        }))
+    }
 }
 
 impl<'a> Generust for MemLines<'a> {
@@ -205,6 +313,18 @@ impl<'a> Generust for MemLines<'a> {
 
 struct MmapFile {
     mem: Mmap,
+}
+
+impl MmapFile {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        if args.len() != 1 {
+            return Err(Error::Macro("FILE - expects one argument".to_string()));
+        }
+        let name = args[0];
+        let file = std::fs::File::open(name)?;
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        Ok(Box::new(MmapFile { mem: mmap }))
+    }
 }
 
 impl Generust for MmapFile {
@@ -226,46 +346,46 @@ impl Generust for Composite {
     }
 }
 
+type MacroFactory = fn(&[&str]) -> Result<Box<dyn Generust>>;
+
 pub struct Parser {
     rx_template: Regex,
-    rx_choice: Regex,
-    rx_integer: Regex,
-    rx_date_range: Regex,
-    rx_file: Regex,
-    by_first: &'static [u8],
-    by_last: &'static [u8],
-    by_domains: &'static [u8],
-    by_country_codes: &'static [u8],
+    rx_macro: Regex,
+    mc_factories: HashMap<String, MacroFactory>,
 }
-
-static BYTES_FIRST: &[u8] = include_bytes!("../dat/first");
-static BYTES_LAST: &[u8] = include_bytes!("../dat/last");
-static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domains");
-static BYTES_COUNTRY_CODES: &[u8] = include_bytes!("../dat/country_codes");
 
 impl Parser {
     pub fn new(symbol: &str) -> Result<Parser> {
-        let txt = &format!("({}{})", symbol, r"\{([^}]+)}");
-        let rx_template = Regex::new(txt)?;
-        let rx_choice = Regex::new(r"^CHOICE\((.+)\)$")?;
-        let rx_integer = Regex::new(r"^INTEGER\((-?\d+),(-?\d+)\)$")?;
-        let rx_date_range = Regex::new(r"DATE\((.{10}),(.{10})\)")?;
-        let rx_file = Regex::new(r"^FILE\((.+)\)$")?;
-        let by_first = BYTES_FIRST;
-        let by_last = BYTES_LAST;
-        let by_domains = BYTES_DOMAIN;
-        let by_country_codes = BYTES_COUNTRY_CODES;
+        let rx_template = Regex::new(&format!("({}{})", symbol, r"\{([^}]+)}"))?;
+        let rx_macro = Regex::new(r"(^.+)\((.*)\)")?;
+        let mut mc_factories = HashMap::new();
+        mc_factories.insert("INDEX".to_string(), Index::create as MacroFactory);
+        mc_factories.insert("DATE".to_string(), DateRnd::create as MacroFactory);
+        mc_factories.insert("UUID4".to_string(), Uuid4::create as MacroFactory);
+        mc_factories.insert("INTEGER".to_string(), Integer::create as MacroFactory);
+        mc_factories.insert(
+            "IPV4_ADDRESS".to_string(),
+            IpV4Address::create as MacroFactory,
+        );
+        mc_factories.insert("TIMESTAMP".to_string(), Timestamp::create as MacroFactory);
+        mc_factories.insert("CHOICE".to_string(), Choice::create as MacroFactory);
+        mc_factories.insert("PHONE".to_string(), Phone::create as MacroFactory);
+        mc_factories.insert("FILE".to_string(), MmapFile::create as MacroFactory);
+        mc_factories.insert("FIRST".to_string(), MemLines::create_first as MacroFactory);
+        mc_factories.insert("LAST".to_string(), MemLines::create_last as MacroFactory);
+        mc_factories.insert(
+            "DOMAIN".to_string(),
+            MemLines::create_domain as MacroFactory,
+        );
+        mc_factories.insert(
+            "COUNTRY_CODE".to_string(),
+            MemLines::create_country_codes as MacroFactory,
+        );
 
         Ok(Parser {
             rx_template,
-            rx_choice,
-            rx_integer,
-            rx_date_range,
-            rx_file,
-            by_first,
-            by_last,
-            by_domains,
-            by_country_codes,
+            rx_macro,
+            mc_factories,
         })
     }
 
@@ -279,13 +399,14 @@ impl Parser {
         })
     }
 
+    /*
     fn parse_macro(&self, text: &str) -> Result<Box<dyn Generust>> {
         if text.eq("INDEX") {
             Ok(Box::new(Index {}))
         } else if text.eq("UUID") {
             Ok(Box::new(Uuid4 {}))
         } else if text.eq("IPV4_ADDRESS") {
-            Ok(Box::new(IpAddress {}))
+            Ok(Box::new(IpV4Address {}))
         } else if text.eq("TIMESTAMP") {
             Ok(Box::new(Timestamp {}))
         } else if text.eq("PHONE") {
@@ -358,12 +479,33 @@ impl Parser {
         } else if let Some(cap) = self.rx_date_range.captures(text) {
             let min = cap.get(1).unwrap().as_str().parse::<NaiveDate>()?;
             let max = cap.get(2).unwrap().as_str().parse::<NaiveDate>()?;
-            Ok(Box::new(DateRange {
+            Ok(Box::new(DateRnd {
                 min: min.and_hms(0, 0, 0).timestamp(),
                 max: max.and_hms(0, 0, 0).timestamp(),
             }))
         } else {
             Ok(self.parse_text(text))
+        }
+    }
+     */
+
+    fn parse_macro2(&self, text: &str) -> Result<Box<dyn Generust>> {
+        let (name, args) = match self.rx_macro.captures(text) {
+            Some(cap) => {
+                let name = cap.get(1)?.as_str();
+                let args = cap
+                    .get(2)?
+                    .as_str()
+                    .split(',')
+                    .map(|a| a.trim())
+                    .collect::<Vec<&str>>();
+                (name, args)
+            }
+            None => (text, vec![]),
+        };
+        match self.mc_factories.get(name) {
+            Some(factory) => factory(&args),
+            None => Text::parse(text),
         }
     }
 
@@ -380,7 +522,7 @@ impl Parser {
             }
 
             // Generust
-            gs.push(self.parse_macro(inner.as_str())?);
+            gs.push(self.parse_macro2(inner.as_str())?);
 
             start = outer.end();
         }
