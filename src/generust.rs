@@ -274,25 +274,25 @@ impl Generust for Timestamp {
     }
 }
 
-struct Choice {
+struct EnumRnd {
     vars: Vec<String>,
 }
 
-impl Choice {
+impl EnumRnd {
     fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
         if args.is_empty() {
             return Err(Error::Macro("CHOICE - not enough arguments".to_string()));
         }
         let vars = args.iter().map(|v| v.to_string()).collect::<Vec<String>>();
-        Ok(Box::new(Choice { vars }))
+        Ok(Box::new(EnumRnd { vars }))
     }
     fn create_boolean(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(Choice {
+        Ok(Box::new(EnumRnd {
             vars: vec!["true".to_string(), "false".to_string()],
         }))
     }
     fn create_gender(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(Choice {
+        Ok(Box::new(EnumRnd {
             vars: vec!["Male".to_string(), "Female".to_string()],
         }))
     }
@@ -308,11 +308,11 @@ impl Choice {
                 }
             }
         }
-        Ok(Box::new(Choice { vars: vs }))
+        Ok(Box::new(EnumRnd { vars: vs }))
     }
 }
 
-impl Generust for Choice {
+impl Generust for EnumRnd {
     fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let i = rng.gen_range(0, self.vars.len());
@@ -449,10 +449,10 @@ impl Parser {
         reg(&mut mc_factories, "UUID4", Uuid4::create);
         reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
         reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);
-        reg(&mut mc_factories, "CHOICE", Choice::create);
-        reg(&mut mc_factories, "TIME_ZONE", Choice::create_time_zone);
-        reg(&mut mc_factories, "BOOLEAN", Choice::create_boolean);
-        reg(&mut mc_factories, "GENDER", Choice::create_gender);
+        reg(&mut mc_factories, "ENUM_RND", EnumRnd::create);
+        reg(&mut mc_factories, "TIME_ZONE", EnumRnd::create_time_zone);
+        reg(&mut mc_factories, "BOOLEAN", EnumRnd::create_boolean);
+        reg(&mut mc_factories, "GENDER", EnumRnd::create_gender);
         reg(&mut mc_factories, "PHONE", Phone::create);
         reg(&mut mc_factories, "FILE", MmapFile::create);
         reg(&mut mc_factories, "FIRST", MemLines::create_first);
