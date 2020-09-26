@@ -23,7 +23,7 @@ fn run(opts: Options) -> Result<()> {
 
     log::debug!("parse template");
     let parser = Parser::new(&opts.macro_start, &opts.separator_args)?;
-    let generust = parser.parse(&template)?;
+    let mut generust = parser.parse(&template)?;
 
     let stdout = std::io::stdout();
     let output = stdout.lock();

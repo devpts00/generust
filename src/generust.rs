@@ -82,7 +82,7 @@ impl From<ParseIntError> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Generust {
-    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()>;
+    fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()>;
 }
 
 struct Text {
@@ -98,7 +98,7 @@ impl Text {
 }
 
 impl Generust for Text {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(self.text.as_bytes()).map(|_| ())?)
     }
 }
@@ -119,7 +119,7 @@ impl RecNum {
 }
 
 impl Generust for RecNum {
-    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", self.start + i)?)
     }
 }
@@ -145,7 +145,7 @@ impl DateRnd {
 }
 
 impl Generust for DateRnd {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let ts = rng.gen_range(self.start, self.end + 1);
         let date = NaiveDateTime::from_timestamp(ts, 0).date();
@@ -174,7 +174,7 @@ impl DateSeq {
 }
 
 impl Generust for DateSeq {
-    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()> {
         let date = self.start + Duration::days(i as i64 % self.length * self.length.signum());
         Ok(write!(w, "{}", date)?)
     }
@@ -189,7 +189,7 @@ impl Uuid4 {
 }
 
 impl Generust for Uuid4 {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", Uuid::new_v4())?)
     }
 }
@@ -212,7 +212,7 @@ impl IntSeq {
 }
 
 impl Generust for IntSeq {
-    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", self.start + i % (self.end - self.start))?)
     }
 }
@@ -235,7 +235,7 @@ impl IntRnd {
 }
 
 impl Generust for IntRnd {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         Ok(write!(w, "{}", rng.gen_range(self.start, self.end))?)
     }
@@ -250,7 +250,7 @@ impl IpV4 {
 }
 
 impl Generust for IpV4 {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
         let b2 = rng.gen_range(1, 255);
@@ -269,7 +269,7 @@ impl Timestamp {
 }
 
 impl Generust for Timestamp {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", chrono::Utc::now().format("%+"))?)
     }
 }
@@ -312,7 +312,7 @@ impl EnumRnd {
 }
 
 impl Generust for EnumRnd {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let i = rng.gen_range(0, self.vars.len());
         Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
@@ -334,7 +334,7 @@ impl EnumSeq {
 }
 
 impl Generust for EnumSeq {
-    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(self.vars[i as usize % self.vars.len()].as_bytes())
             .map(|_| ())?)
     }
@@ -349,7 +349,7 @@ impl Phone {
 }
 
 impl Generust for Phone {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let x1 = rng.gen_range(1, 1000);
         let x2 = rng.gen_range(1, 1000);
@@ -377,32 +377,57 @@ static BYTES_LAST: &[u8] = include_bytes!("../dat/last");
 static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domains");
 static BYTES_COUNTRY_CODES: &[u8] = include_bytes!("../dat/country_codes");
 
-struct MemLines<'a> {
+struct BytesRnd<'a> {
     bytes: &'a [u8],
 }
 
-impl MemLines<'_> {
+impl BytesRnd<'_> {
     fn create_first(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(MemLines { bytes: BYTES_FIRST }))
+        Ok(Box::new(BytesRnd { bytes: BYTES_FIRST }))
     }
     fn create_last(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(MemLines { bytes: BYTES_LAST }))
+        Ok(Box::new(BytesRnd { bytes: BYTES_LAST }))
     }
     fn create_domain(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(MemLines {
+        Ok(Box::new(BytesRnd {
             bytes: BYTES_DOMAIN,
         }))
     }
     fn create_country_codes(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(MemLines {
+        Ok(Box::new(BytesRnd {
             bytes: BYTES_COUNTRY_CODES,
         }))
     }
 }
 
-impl<'a> Generust for MemLines<'a> {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+impl<'a> Generust for BytesRnd<'a> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(self.bytes)).map(|_| ())?)
+    }
+}
+
+fn next_line<'a>(data: &'a [u8], offset: &mut usize) -> &'a [u8] {
+    let start = *offset;
+    let mut end = *offset;
+    while end < data.len() && data[end] != b'\n' {
+        end += 1;
+    }
+    *offset = end + 1;
+    if *offset == data.len() {
+        *offset = 0;
+    }
+    &data[start..end]
+}
+
+struct BytesSeq<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> Generust for BytesSeq<'a> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
+        Ok(w.write(next_line(self.bytes, &mut self.offset))
+            .map(|_| ())?)
     }
 }
 
@@ -423,7 +448,7 @@ impl MmapFile {
 }
 
 impl Generust for MmapFile {
-    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(&self.mem)).map(|_| ())?)
     }
 }
@@ -433,8 +458,8 @@ pub struct Composite {
 }
 
 impl Generust for Composite {
-    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
-        for g in &self.generusts {
+    fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()> {
+        for g in &mut self.generusts {
             g.generate(i, w)?;
         }
         Ok(w.write(b"\n").map(|_| ())?)
@@ -476,13 +501,13 @@ impl Parser {
         reg(&mut mc_factories, "GENDER", EnumRnd::create_gender);
         reg(&mut mc_factories, "PHONE", Phone::create);
         reg(&mut mc_factories, "FILE", MmapFile::create);
-        reg(&mut mc_factories, "FIRST", MemLines::create_first);
-        reg(&mut mc_factories, "LAST", MemLines::create_last);
-        reg(&mut mc_factories, "DOMAIN", MemLines::create_domain);
+        reg(&mut mc_factories, "FIRST", BytesRnd::create_first);
+        reg(&mut mc_factories, "LAST", BytesRnd::create_last);
+        reg(&mut mc_factories, "DOMAIN", BytesRnd::create_domain);
         reg(
             &mut mc_factories,
             "COUNTRY_CODE",
-            MemLines::create_country_codes,
+            BytesRnd::create_country_codes,
         );
 
         Ok(Parser {
