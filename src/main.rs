@@ -12,8 +12,8 @@ mod generust;
 mod logger;
 mod options;
 
-fn quit<T>(code: Option<i32>) -> T {
-    std::process::exit(code.unwrap_or_else(|| 1));
+fn quit(code: Option<i32>) {
+    std::process::exit(code.unwrap_or(1));
 }
 
 fn run(opts: Options) -> Result<()> {
@@ -46,6 +46,14 @@ fn main() {
     match logger::setup(opts.verbose) {
         Ok(()) => log::debug!("logger is successfully initialized"),
         Err(e) => panic!("failed to initalize logger: {}", e),
+    }
+
+    if atty::is(atty::Stream::Stdin) {
+        Options::clap()
+            .print_help()
+            .unwrap_or_else(|err| log::error!("{}", err));
+        println!();
+        quit(None);
     }
 
     log::info!("line count: {}", opts.count);
