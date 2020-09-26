@@ -241,15 +241,15 @@ impl Generust for IntRnd {
     }
 }
 
-struct IpV4Address;
+struct IpV4;
 
-impl IpV4Address {
+impl IpV4 {
     fn create(_args: &[&str]) -> Result<Box<dyn Generust>> {
-        Ok(Box::new(IpV4Address))
+        Ok(Box::new(IpV4))
     }
 }
 
-impl Generust for IpV4Address {
+impl Generust for IpV4 {
     fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
@@ -280,10 +280,10 @@ struct EnumRnd {
 
 impl EnumRnd {
     fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
-        if args.is_empty() {
-            return Err(Error::Macro("CHOICE - not enough arguments".to_string()));
-        }
-        let vars = args.iter().map(|v| v.to_string()).collect::<Vec<String>>();
+        let vars = match args.len() {
+            0 => return Err(Error::Macro("ENUM_RND".to_string())),
+            _ => args.iter().map(|v| v.to_string()).collect::<Vec<String>>(),
+        };
         Ok(Box::new(EnumRnd { vars }))
     }
     fn create_boolean(_args: &[&str]) -> Result<Box<dyn Generust>> {
@@ -296,7 +296,6 @@ impl EnumRnd {
             vars: vec!["Male".to_string(), "Female".to_string()],
         }))
     }
-
     fn create_time_zone(_args: &[&str]) -> Result<Box<dyn Generust>> {
         let tzs = glob::glob("/usr/share/zoneinfo/posix/**/*")?;
         let mut vs = vec![];
@@ -317,6 +316,27 @@ impl Generust for EnumRnd {
         let mut rng = rand::thread_rng();
         let i = rng.gen_range(0, self.vars.len());
         Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
+    }
+}
+
+struct EnumSeq {
+    vars: Vec<String>,
+}
+
+impl EnumSeq {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        let vars = match args.len() {
+            0 => return Err(Error::Macro("ENUM_SEQ".to_string())),
+            _ => args.iter().map(|v| v.to_string()).collect::<Vec<String>>(),
+        };
+        Ok(Box::new(EnumSeq { vars }))
+    }
+}
+
+impl Generust for EnumSeq {
+    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+        Ok(w.write(self.vars[i as usize % self.vars.len()].as_bytes())
+            .map(|_| ())?)
     }
 }
 
@@ -447,8 +467,9 @@ impl Parser {
         reg(&mut mc_factories, "DATE_SEQ", DateSeq::create);
         reg(&mut mc_factories, "DATE_RND", DateRnd::create);
         reg(&mut mc_factories, "UUID4", Uuid4::create);
-        reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
+        reg(&mut mc_factories, "IPV4", IpV4::create);
         reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);
+        reg(&mut mc_factories, "ENUM_SEQ", EnumSeq::create);
         reg(&mut mc_factories, "ENUM_RND", EnumRnd::create);
         reg(&mut mc_factories, "TIME_ZONE", EnumRnd::create_time_zone);
         reg(&mut mc_factories, "BOOLEAN", EnumRnd::create_boolean);
