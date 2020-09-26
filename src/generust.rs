@@ -427,11 +427,12 @@ pub struct Parser {
     rx_template: Regex,
     rx_macro: Regex,
     mc_factories: HashMap<String, MacroFactory>,
+    separator_args: String,
 }
 
 impl Parser {
-    pub fn new(symbol: &str) -> Result<Parser> {
-        let rx_template = Regex::new(&format!("({}{})", symbol, r"\{([^}]+)}"))?;
+    pub fn new(macro_start: &str, separator_args: &str) -> Result<Parser> {
+        let rx_template = Regex::new(&format!("({}{})", macro_start, r"\{([^}]+)}"))?;
         let rx_macro = Regex::new(r"(^.+)\((.*)\)")?;
 
         fn reg(fs: &mut HashMap<String, MacroFactory>, name: &str, f: MacroFactory) {
@@ -467,6 +468,7 @@ impl Parser {
             rx_template,
             rx_macro,
             mc_factories,
+            separator_args: separator_args.to_string(),
         })
     }
 
@@ -487,7 +489,7 @@ impl Parser {
                 let args = cap
                     .get(2)?
                     .as_str()
-                    .split(',')
+                    .split(&self.separator_args)
                     .map(|a| a.trim())
                     .collect::<Vec<&str>>();
                 (name, args)

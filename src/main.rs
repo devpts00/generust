@@ -22,7 +22,7 @@ fn run(opts: Options) -> Result<()> {
     std::io::stdin().lock().read_to_string(&mut template)?;
 
     log::debug!("parse template");
-    let parser = Parser::new(&opts.symbol)?;
+    let parser = Parser::new(&opts.macro_start, &opts.separator_args)?;
     let generust = parser.parse(&template)?;
 
     let stdout = std::io::stdout();
@@ -49,7 +49,7 @@ fn main() {
     }
 
     log::info!("line count: {}", opts.count);
-    log::info!("macro symbol: {}", opts.symbol);
+    log::info!("macro symbol: {}", opts.separator_args);
     log::info!("verbose level: {}", opts.verbose);
 
     match run(opts) {
