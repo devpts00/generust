@@ -4,7 +4,7 @@ use std::io::Write;
 use std::num::ParseIntError;
 use std::option;
 
-use chrono::{Local, NaiveDate, NaiveDateTime, ParseError};
+use chrono::{Duration, Local, NaiveDate, NaiveDateTime, ParseError};
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
@@ -82,7 +82,7 @@ impl From<ParseIntError> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Generust {
-    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()>;
+    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()>;
 }
 
 struct Text {
@@ -98,7 +98,7 @@ impl Text {
 }
 
 impl Generust for Text {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(self.text.as_bytes()).map(|_| ())?)
     }
 }
@@ -119,14 +119,14 @@ impl RecNum {
 }
 
 impl Generust for RecNum {
-    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
-        Ok(write!(w, "{}", self.start + i as i32)?)
+    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+        Ok(write!(w, "{}", self.start + i)?)
     }
 }
 
 struct DateRnd {
-    min: i64,
-    max: i64,
+    start: i64,
+    end: i64,
 }
 
 impl DateRnd {
@@ -135,20 +135,47 @@ impl DateRnd {
             Ok(date.parse::<NaiveDate>()?.and_hms(0, 0, 0).timestamp())
         }
         let now: i64 = Local::now().timestamp();
-        let (min, max) = match args.len() {
+        let (start, end) = match args.len() {
             0 => (0, now),
-            1 => (seconds(args[0])?, now),
-            _ => (seconds(args[0])?, seconds(args[1])?),
+            2 => (seconds(args[0])?, seconds(args[1])?),
+            _ => return Err(Error::Macro("DATE_RND".to_string())),
         };
-        Ok(Box::new(DateRnd { min, max }))
+        Ok(Box::new(DateRnd { start, end }))
     }
 }
 
 impl Generust for DateRnd {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
-        let ts = rng.gen_range(self.min, self.max + 1);
+        let ts = rng.gen_range(self.start, self.end + 1);
         let date = NaiveDateTime::from_timestamp(ts, 0).date();
+        Ok(write!(w, "{}", date)?)
+    }
+}
+
+struct DateSeq {
+    start: NaiveDate,
+    length: i64,
+}
+
+impl DateSeq {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        let (start, end) = match args.len() {
+            0 => (
+                NaiveDate::from_ymd(1970, 1, 1),
+                Local::now().naive_local().date(),
+            ),
+            2 => (args[0].parse()?, args[1].parse()?),
+            _ => return Err(Error::Macro("DATE_SEQ".to_string())),
+        };
+        let length = (end - start).num_days();
+        Ok(Box::new(DateSeq { start, length }))
+    }
+}
+
+impl Generust for DateSeq {
+    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+        let date = self.start + Duration::days(i as i64 % self.length * self.length.signum());
         Ok(write!(w, "{}", date)?)
     }
 }
@@ -162,7 +189,7 @@ impl Uuid4 {
 }
 
 impl Generust for Uuid4 {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", Uuid::new_v4())?)
     }
 }
@@ -185,9 +212,8 @@ impl IntSeq {
 }
 
 impl Generust for IntSeq {
-    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
-        let o = (i as i64) % (self.end as i64 - self.start as i64);
-        Ok(write!(w, "{}", self.start as i64 + o)?)
+    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
+        Ok(write!(w, "{}", self.start + i % (self.end - self.start))?)
     }
 }
 
@@ -209,7 +235,7 @@ impl IntRnd {
 }
 
 impl Generust for IntRnd {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         Ok(write!(w, "{}", rng.gen_range(self.start, self.end))?)
     }
@@ -224,7 +250,7 @@ impl IpV4Address {
 }
 
 impl Generust for IpV4Address {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let b1 = rng.gen_range(1, 255);
         let b2 = rng.gen_range(1, 255);
@@ -243,7 +269,7 @@ impl Timestamp {
 }
 
 impl Generust for Timestamp {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", chrono::Utc::now().format("%+"))?)
     }
 }
@@ -287,7 +313,7 @@ impl Choice {
 }
 
 impl Generust for Choice {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let i = rng.gen_range(0, self.vars.len());
         Ok(w.write(self.vars[i].as_bytes()).map(|_| ())?)
@@ -303,7 +329,7 @@ impl Phone {
 }
 
 impl Generust for Phone {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
         let x1 = rng.gen_range(1, 1000);
         let x2 = rng.gen_range(1, 1000);
@@ -355,7 +381,7 @@ impl MemLines<'_> {
 }
 
 impl<'a> Generust for MemLines<'a> {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(self.bytes)).map(|_| ())?)
     }
 }
@@ -377,7 +403,7 @@ impl MmapFile {
 }
 
 impl Generust for MmapFile {
-    fn generate(&self, _i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(&self.mem)).map(|_| ())?)
     }
 }
@@ -387,7 +413,7 @@ pub struct Composite {
 }
 
 impl Generust for Composite {
-    fn generate(&self, i: u32, w: &mut dyn Write) -> Result<()> {
+    fn generate(&self, i: i32, w: &mut dyn Write) -> Result<()> {
         for g in &self.generusts {
             g.generate(i, w)?;
         }
@@ -417,7 +443,8 @@ impl Parser {
         reg(&mut mc_factories, "REC_NUM", RecNum::create);
         reg(&mut mc_factories, "INT_SEQ", IntSeq::create);
         reg(&mut mc_factories, "INT_RND", IntRnd::create);
-        reg(&mut mc_factories, "DATE", DateRnd::create);
+        reg(&mut mc_factories, "DATE_SEQ", DateSeq::create);
+        reg(&mut mc_factories, "DATE_RND", DateRnd::create);
         reg(&mut mc_factories, "UUID4", Uuid4::create);
         reg(&mut mc_factories, "IPV4_ADDRESS", IpV4Address::create);
         reg(&mut mc_factories, "TIMESTAMP", Timestamp::create);

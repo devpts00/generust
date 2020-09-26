@@ -31,7 +31,7 @@ fn run(opts: Options) -> Result<()> {
     let mut p = 0;
     for i in 0..opts.count {
         generust.generate(i, &mut buffer)?;
-        let n = 100 * i as u64 / opts.count as u64;
+        let n = 100 * i / opts.count;
         if n > p {
             p = n;
             log::debug!("progress: {}%", p);
