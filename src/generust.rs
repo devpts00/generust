@@ -424,6 +424,33 @@ struct BytesSeq<'a> {
     offset: usize,
 }
 
+impl BytesSeq<'_> {
+    fn create_first(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(BytesSeq {
+            bytes: BYTES_FIRST,
+            offset: 0,
+        }))
+    }
+    fn create_last(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(BytesSeq {
+            bytes: BYTES_LAST,
+            offset: 0,
+        }))
+    }
+    fn create_domain(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(BytesSeq {
+            bytes: BYTES_DOMAIN,
+            offset: 0,
+        }))
+    }
+    fn create_country_code(_args: &[&str]) -> Result<Box<dyn Generust>> {
+        Ok(Box::new(BytesSeq {
+            bytes: BYTES_COUNTRY_CODES,
+            offset: 0,
+        }))
+    }
+}
+
 impl<'a> Generust for BytesSeq<'a> {
     fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(next_line(self.bytes, &mut self.offset))
@@ -500,16 +527,23 @@ impl Parser {
         reg(&mut mc_factories, "BOOLEAN", EnumRnd::create_boolean);
         reg(&mut mc_factories, "GENDER", EnumRnd::create_gender);
         reg(&mut mc_factories, "PHONE", Phone::create);
-        reg(&mut mc_factories, "FIRST", BytesRnd::create_first);
-        reg(&mut mc_factories, "LAST", BytesRnd::create_last);
-        reg(&mut mc_factories, "DOMAIN", BytesRnd::create_domain);
-        reg(&mut mc_factories, "COUNTRY_CODE", BytesRnd::create_country_code);
-        reg(&mut mc_factories, "FILE", MmapFile::create);
+        reg(&mut mc_factories, "FIRST_SEQ", BytesSeq::create_first);
+        reg(&mut mc_factories, "FIRST_RND", BytesRnd::create_first);
+        reg(&mut mc_factories, "LAST_SEQ", BytesSeq::create_last);
+        reg(&mut mc_factories, "LAST_RND", BytesRnd::create_last);
+        reg(&mut mc_factories, "DOMAIN_SEQ", BytesSeq::create_domain);
+        reg(&mut mc_factories, "DOMAIN_RND", BytesRnd::create_domain);
         reg(
             &mut mc_factories,
-            "COUNTRY_CODE",
+            "COUNTRY_CODE_SEQ",
+            BytesSeq::create_country_code,
+        );
+        reg(
+            &mut mc_factories,
+            "COUNTRY_CODE_RND",
             BytesRnd::create_country_code,
         );
+        reg(&mut mc_factories, "FILE", MmapFile::create);
 
         Ok(Parser {
             rx_template,
