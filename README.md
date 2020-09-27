@@ -2,7 +2,7 @@
 
 ## Summary
 
-Straightforward data generator tool. Consumes a template string with macros that generate random data. Rest of the string goes to the output as is. That allows constructing pretty much any new line separated text. 
+Dumb data generator tool. Consumes a template string with macros that generate random data. Rest of the string goes to the output as is. That allows constructing pretty much any new line separated text. 
 
 ## Build
 
@@ -16,23 +16,29 @@ cat template.txt | generust
 
 ## Template
 
-See the file `template.txt` for an example.
+See the files in `examples` folder for an example.
 
 ## Macros
 
-- ${INDEX} - ordinal number of the line as is.
-- ${UUID} - Uuid4
-- ${IPV4_ADDRESS} - random IPv4 address
-- ${TIMESTAMP} - current timestamp in RFC-3339.
-- ${PHONE} - random phone number.
-- ${BOOLEAN} - true or false.
-- ${GENDER} - Male or Female.
-- ${FIRST} - random first name from the fixed list.
-- ${LAST} - random last name from the fixed list.
-- ${DOMAIN} - random domain from the fixed list.
-- ${COUNTRY_CODE} - random country code.
-- ${TIMEZONE} - random timezone from your computer file system.
-- ${FILE(file.txt)} - random line from text file. The files should fit in RAM to keep it fast. 
-- ${CHOICE(one,two,three)} - random item from the specified list.
-- ${INTEGER(1,9)} - random integer from the specified interval.
-- ${DATE(2010-01-01,2020-02-02)} - random date from the specified range.
+- ROW_NUM - row number
+- UUID4 - uuid 4
+- TIMESTAMP - current timestamp in RFC-3339
+- INT_SEQ - sequential integer from the range
+- INT_RND - random integer from the range
+- DATE_SEQ - sequential date from the range
+- DATE_RND - random date from the range
+- BOOLEAN - true or false
+- GENDER - Male or Female
+- ENUM_SEQ - sequential value from the list
+- ENUM_RND - random value from the list
+- IPV4 - random IPv4
+- TIME_ZONE - random timezone
+- PHONE - random phone number
+- FIRST_SEQ - sequential first name
+- FIRST_RND - random first name
+- LAST_SEQ - sequential last name
+- LAST_RND - random last name
+- DOMAIN_SEQ - sequential domain
+- DOMAIN_RND - random domain
+- FILE_SEQ - sequential value from the file
+- FILE_RND - random value from the file
