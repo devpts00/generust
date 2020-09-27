@@ -103,22 +103,22 @@ impl Generust for Text {
     }
 }
 
-struct RecNum {
+struct RowNum {
     start: i32,
 }
 
-impl RecNum {
+impl RowNum {
     fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
         let start: i32 = match args.len() {
             0 => 0,
             1 => args[0].parse::<i32>()?,
             _ => return Err(Error::Macro("INDEX - too many arguments".to_string())),
         };
-        Ok(Box::new(RecNum { start }))
+        Ok(Box::new(RowNum { start }))
     }
 }
 
-impl Generust for RecNum {
+impl Generust for RowNum {
     fn generate(&mut self, i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(write!(w, "{}", self.start + i)?)
     }
@@ -540,7 +540,7 @@ impl Parser {
 
         let mut mc_factories = HashMap::new();
 
-        reg(&mut mc_factories, "REC_NUM", RecNum::create);
+        reg(&mut mc_factories, "ROW_NUM", RowNum::create);
         reg(&mut mc_factories, "INT_SEQ", IntSeq::create);
         reg(&mut mc_factories, "INT_RND", IntRnd::create);
         reg(&mut mc_factories, "DATE_SEQ", DateSeq::create);
@@ -640,12 +640,12 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
-    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
 
-    use chrono::DateTime;
+    use chrono::{DateTime, NaiveDate};
     use uuid::Uuid;
 
-    use crate::generust::Parser;
+    use crate::generust::{Generust, Parser};
 
     fn buf(size: usize) -> Vec<u8> {
         Vec::with_capacity(size)
@@ -656,55 +656,129 @@ mod test {
     }
 
     fn parser() -> Parser {
-        Parser::new("\\$").unwrap()
+        Parser::new("\\$", ",").unwrap()
     }
 
-    #[test]
-    fn test_text() {
-        let text = "hello";
-        let mut buf = buf(10);
-        let g = parser().parse_text(text);
-        assert!(g.generate(0, &mut buf).is_ok());
-        let str = str(buf);
-        assert_eq!(text, str);
+    fn parse(name: &str) -> Box<dyn Generust> {
+        parser().parse_macro(name).unwrap()
+    }
+
+    fn generate(g: &mut Box<dyn Generust>, i: i32) -> String {
+        let mut buf = Vec::with_capacity(512);
+        assert!(g.generate(i, &mut buf).is_ok());
+        String::from_utf8(buf).expect("invalid utf8")
+    }
+
+    type Probe = fn(i: i32, s: &str);
+
+    fn roll(mut g: &mut Box<dyn Generust>, f: Probe) {
+        for i in 0..123 {
+            f(i, &generate(&mut g, i));
+        }
     }
 
     fn test(name: &str) -> String {
         let mut buf = buf(128);
-        let g = parser().parse_macro(name).ok().unwrap();
+        let mut g = parse(name);
         assert!(g.generate(0, &mut buf).is_ok());
         str(buf)
     }
 
     #[test]
-    fn test_index() {
-        let str = test("INDEX");
-        assert!(str.parse::<u32>().is_ok())
+    fn test_text() {
+        let s1 = "hello";
+        let mut g = parser().parse_text(s1);
+        let s2 = generate(&mut g, 0);
+        assert_eq!(s1, s2);
     }
 
     #[test]
-    fn test_uuid() {
-        let str = test("UUID");
-        assert!(Uuid::parse_str(&str).is_ok());
+    fn test_row_num() {
+        let mut g = parse("ROW_NUM");
+        roll(&mut g, |i, s| {
+            assert_eq!(i, s.parse().unwrap());
+        });
     }
 
     #[test]
-    fn test_integer() {
-        let str = test("INTEGER(0,100)");
-        assert!(str.parse::<i64>().is_ok());
+    fn test_int_seq() {
+        let mut g = parse("INT_SEQ(3, 17)");
+        roll(&mut g, |_, s| assert!(s.parse::<i32>().is_ok()));
+    }
+
+    #[test]
+    fn test_int_rnd() {
+        let mut g = parse("INT_RND(3, 17)");
+        roll(&mut g, |_, s| assert!(s.parse::<i32>().is_ok()));
+    }
+
+    #[test]
+    fn test_date_seq() {
+        let mut g = parse("DATE_SEQ(2010-01-01,2020-02-02)");
+        roll(&mut g, |_, s| {
+            assert!(s.parse::<NaiveDate>().is_ok());
+        });
+    }
+
+    #[test]
+    fn test_date_rnd() {
+        let mut g = parse("DATE_RND(2010-01-01,2020-02-02)");
+        roll(&mut g, |_, s| {
+            assert!(s.parse::<NaiveDate>().is_ok());
+        });
+    }
+
+    #[test]
+    fn test_uuid4() {
+        let mut g = parse("UUID4");
+        roll(&mut g, |_, s| {
+            assert!(Uuid::parse_str(s).is_ok());
+        });
+    }
+
+    #[test]
+    fn test_ipv4() {
+        let mut g = parse("IPV4");
+        roll(&mut g, |_, s| {
+            assert!(s.parse::<Ipv4Addr>().is_ok());
+        });
     }
 
     #[test]
     fn test_timestamp() {
-        let str = test("TIMESTAMP");
-        assert!(DateTime::parse_from_rfc3339(&str).is_ok());
+        let mut g = parse("TIMESTAMP");
+        roll(&mut g, |_, s| {
+            assert!(DateTime::parse_from_rfc3339(s).is_ok());
+        });
     }
 
     #[test]
-    fn test_ipaddress() {
-        let str = test("IPADDRESS");
-        assert!(str.parse::<IpAddr>().is_ok());
+    fn test_enum_seq() {
+        let mut g = parse("ENUM_SEQ(1,2,3)");
+        roll(&mut g, |_, s| {
+            assert!(s.parse::<i32>().is_ok());
+        });
     }
+
+    #[test]
+    fn test_enum_rnd() {
+        let mut g = parse("ENUM_RND(1,2,3)");
+        roll(&mut g, |_, s| {
+            assert!(s.parse::<i32>().is_ok());
+        });
+    }
+
+
+
+
+
+
+    #[test]
+    fn test_int() {
+        let str = test("INT_RND(0,100)");
+        assert!(str.parse::<i64>().is_ok());
+    }
+
 
     #[test]
     fn test_phone() {
@@ -712,14 +786,8 @@ mod test {
     }
 
     #[test]
-    fn test_choice() {
-        let str = test("CHOICE(1,2,3)");
-        assert!(str.eq("1") || str.eq("2") || str.eq("3"));
-    }
-
-    #[test]
     fn test_timezone() {
-        test("TIMEZONE");
+        test("TIME_ZONE");
     }
 
     #[test]
@@ -736,14 +804,14 @@ mod test {
 
     #[test]
     fn test_bytes() {
-        let str = test("LAST");
+        let str = test("LAST_RND");
         assert!(!str.is_empty());
     }
 
     #[test]
     fn test_composite() {
-        let g = parser()
-            .parse("@{UUID},@{CHOICE(1,2,3),@{INTEGER(1,10)}")
+        let mut g = parser()
+            .parse("@{UUID4},@{ENUM_SEQ(1,2,3),@{INT_RND(1,10)}")
             .unwrap();
         let mut buf = buf(128);
         assert!(g.generate(0, &mut buf).is_ok());
