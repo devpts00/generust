@@ -647,14 +647,6 @@ mod test {
 
     use crate::generust::{Generust, Parser};
 
-    fn buf(size: usize) -> Vec<u8> {
-        Vec::with_capacity(size)
-    }
-
-    fn str(vec: Vec<u8>) -> String {
-        String::from_utf8(vec).expect("invalid utf8")
-    }
-
     fn parser() -> Parser {
         Parser::new("\\$", ",").unwrap()
     }
@@ -675,13 +667,6 @@ mod test {
         for i in 0..123 {
             f(i, &generate(&mut g, i));
         }
-    }
-
-    fn test(name: &str) -> String {
-        let mut buf = buf(128);
-        let mut g = parse(name);
-        assert!(g.generate(0, &mut buf).is_ok());
-        str(buf)
     }
 
     #[test]
@@ -768,44 +753,52 @@ mod test {
         });
     }
 
-
-
-
-
-
-    #[test]
-    fn test_int() {
-        let str = test("INT_RND(0,100)");
-        assert!(str.parse::<i64>().is_ok());
-    }
-
-
-    #[test]
-    fn test_phone() {
-        test("PHONE");
-    }
-
     #[test]
     fn test_timezone() {
-        test("TIME_ZONE");
+        let mut g = parse("TIME_ZONE");
+        roll(&mut g, |_, s| {
+            assert!(!s.is_empty());
+        });
     }
 
     #[test]
     fn test_boolean() {
-        let str = test("BOOLEAN");
-        assert!(str.eq("true") || str.eq("false"));
+        let mut g = parse("BOOLEAN");
+        roll(&mut g, |_, s| {
+            assert!(s.eq("true") || s.eq("false"));
+        });
     }
 
     #[test]
     fn test_gender() {
-        let str = test("GENDER");
-        assert!(str.eq("Male") || str.eq("Female"));
+        let mut g = parse("GENDER");
+        roll(&mut g, |_, s| {
+            assert!(s.eq("Male") || s.eq("Female"));
+        });
     }
 
     #[test]
-    fn test_bytes() {
-        let str = test("LAST_RND");
-        assert!(!str.is_empty());
+    fn test_phone() {
+        let mut g = parse("PHONE");
+        roll(&mut g, |_, s| {
+            assert!(!s.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_bytes_seq() {
+        let mut g = parse("FIRST_SEQ");
+        roll(&mut g, |_, s| {
+            assert!(!s.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_bytes_rnd() {
+        let mut g = parse("FIRST_RND");
+        roll(&mut g, |_, s| {
+            assert!(!s.is_empty());
+        });
     }
 
     #[test]
@@ -813,7 +806,7 @@ mod test {
         let mut g = parser()
             .parse("@{UUID4},@{ENUM_SEQ(1,2,3),@{INT_RND(1,10)}")
             .unwrap();
-        let mut buf = buf(128);
+        let mut buf = Vec::with_capacity(128);
         assert!(g.generate(0, &mut buf).is_ok());
     }
 }
