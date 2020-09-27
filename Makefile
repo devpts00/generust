@@ -1,3 +1,6 @@
+DEBUG=target/debug/generust
+RELEASE=target/release/generust
+
 clean:
 	cargo clean
 
@@ -13,18 +16,6 @@ release: format clippy
 test:
 	cargo test -- --nocapture
 
-run: build
-	cat template.txt | target/debug/generust -c 25
-
-run-stress: release
-	cat template.txt | target/release/generust -c 1000000 -v 3 > output.dat
-
-run-ucs: #release
-	cat ucs.template | target/release/generust -c 1000000 -v 4 > ucs.output
-
-run-test: release
-	cat test.template | target/release/generust -c 10
-
 help:
 	cargo run -- --help
 
@@ -33,3 +24,9 @@ format:
 
 clippy:
 	cargo clippy
+
+make csv: release
+	cd examples && cat template.csv | ../$(RELEASE) -c 5 | column -s, -t
+
+make json: release
+	cd examples && cat template.json | ../$(RELEASE) -c 1 | jq

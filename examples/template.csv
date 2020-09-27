@@ -1,0 +1,1 @@
+${ROW_NUM(1)},${UUID4},${TIMESTAMP},${INT_SEQ(3)},${INT_RND(0,100)},${DATE_SEQ(2020-01-01,2010-01-01)},${DATE_RND},${BOOLEAN},${GENDER},${ENUM_SEQ(one, two, three)},${ENUM_RND(one, two, three)},${IPV4},${TIME_ZONE}, ${PHONE},${FIRST_RND},${FIRST_SEQ},${LAST_RND},${LAST_SEQ},${DOMAIN_RND},${DOMAIN_SEQ},${FILE_RND(file.txt)},${FILE_SEQ(file.txt)}
