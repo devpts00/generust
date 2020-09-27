@@ -372,10 +372,10 @@ fn random_line(data: &[u8]) -> &[u8] {
     &data[start..end]
 }
 
-static BYTES_FIRST: &[u8] = include_bytes!("../dat/first");
-static BYTES_LAST: &[u8] = include_bytes!("../dat/last");
-static BYTES_DOMAIN: &[u8] = include_bytes!("../dat/domains");
-static BYTES_COUNTRY_CODES: &[u8] = include_bytes!("../dat/country_codes");
+static BYTES_FIRST: &[u8] = include_bytes!("resources/first");
+static BYTES_LAST: &[u8] = include_bytes!("resources/last");
+static BYTES_DOMAIN: &[u8] = include_bytes!("resources/domains");
+static BYTES_COUNTRY_CODES: &[u8] = include_bytes!("resources/country_codes");
 
 struct BytesRnd<'a> {
     bytes: &'a [u8],
