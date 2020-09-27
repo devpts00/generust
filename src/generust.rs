@@ -413,7 +413,7 @@ fn next_line<'a>(data: &'a [u8], offset: &mut usize) -> &'a [u8] {
         end += 1;
     }
     *offset = end + 1;
-    if *offset == data.len() {
+    if *offset >= data.len() {
         *offset = 0;
     }
     &data[start..end]
@@ -458,25 +458,52 @@ impl<'a> Generust for BytesSeq<'a> {
     }
 }
 
-struct MmapFile {
+struct FileRnd {
     mem: Mmap,
 }
 
-impl MmapFile {
+impl FileRnd {
     fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
-        if args.len() != 1 {
-            return Err(Error::Macro("FILE - expects one argument".to_string()));
-        }
-        let name = args[0];
+        let name = match args.len() {
+            1 => args[0],
+            _ => return Err(Error::Macro("FILE_RND".to_string())),
+        };
         let file = std::fs::File::open(name)?;
         let mmap = unsafe { MmapOptions::new().map(&file)? };
-        Ok(Box::new(MmapFile { mem: mmap }))
+        Ok(Box::new(FileRnd { mem: mmap }))
     }
 }
 
-impl Generust for MmapFile {
+impl Generust for FileRnd {
     fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         Ok(w.write(random_line(&self.mem)).map(|_| ())?)
+    }
+}
+
+struct FileSeq {
+    mem: Mmap,
+    offset: usize,
+}
+
+impl FileSeq {
+    fn create(args: &[&str]) -> Result<Box<dyn Generust>> {
+        let name = match args.len() {
+            1 => args[0],
+            _ => return Err(Error::Macro("FILE_SEQ".to_string())),
+        };
+        let file = std::fs::File::open(name)?;
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        Ok(Box::new(FileSeq {
+            mem: mmap,
+            offset: 0,
+        }))
+    }
+}
+
+impl Generust for FileSeq {
+    fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
+        Ok(w.write(next_line(&self.mem, &mut self.offset))
+            .map(|_| ())?)
     }
 }
 
@@ -543,7 +570,8 @@ impl Parser {
             "COUNTRY_CODE_RND",
             BytesRnd::create_country_code,
         );
-        reg(&mut mc_factories, "FILE", MmapFile::create);
+        reg(&mut mc_factories, "FILE_RND", FileRnd::create);
+        reg(&mut mc_factories, "FILE_SEQ", FileSeq::create);
 
         Ok(Parser {
             rx_template,
