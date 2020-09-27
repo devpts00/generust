@@ -393,7 +393,7 @@ impl BytesRnd<'_> {
             bytes: BYTES_DOMAIN,
         }))
     }
-    fn create_country_codes(_args: &[&str]) -> Result<Box<dyn Generust>> {
+    fn create_country_code(_args: &[&str]) -> Result<Box<dyn Generust>> {
         Ok(Box::new(BytesRnd {
             bytes: BYTES_COUNTRY_CODES,
         }))
@@ -500,14 +500,15 @@ impl Parser {
         reg(&mut mc_factories, "BOOLEAN", EnumRnd::create_boolean);
         reg(&mut mc_factories, "GENDER", EnumRnd::create_gender);
         reg(&mut mc_factories, "PHONE", Phone::create);
-        reg(&mut mc_factories, "FILE", MmapFile::create);
         reg(&mut mc_factories, "FIRST", BytesRnd::create_first);
         reg(&mut mc_factories, "LAST", BytesRnd::create_last);
         reg(&mut mc_factories, "DOMAIN", BytesRnd::create_domain);
+        reg(&mut mc_factories, "COUNTRY_CODE", BytesRnd::create_country_code);
+        reg(&mut mc_factories, "FILE", MmapFile::create);
         reg(
             &mut mc_factories,
             "COUNTRY_CODE",
-            BytesRnd::create_country_codes,
+            BytesRnd::create_country_code,
         );
 
         Ok(Parser {
