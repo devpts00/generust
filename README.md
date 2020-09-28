@@ -48,12 +48,12 @@ Random integer from the specified range:
 #### DATE_SEQ
 Sequential date from the specified range:
 - `${DATE_SEQ(2010-01-01,2020-01-01)}` ⇒ `2010-01-01,2010-01-02,2010-01-03...`
-- `${DATE_SEQ}` ≡ `${DATE_SEQ(1970-01-01,NOW)}`
+- `${DATE_SEQ}` ≡ `${DATE_SEQ(1970-01-01,TODAY)}`
 
 #### DATE_RND
 Random date from the specified range:
 - `${DATE_RND(2010-01-01,2020-01-01)}` ⇒ `2015-03-21,2017-11-12,2011-08-13...`
-- `${DATE_RND}` ≡ `${DATE_RND(1970-01-01,NOW)}`
+- `${DATE_RND}` ≡ `${DATE_RND(1970-01-01,TODAY)}`
 
 #### BOOLEAN
 Random true or false:
