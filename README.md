@@ -6,7 +6,7 @@ Dumb data generator tool. Consumes a template string with macros that generate r
 
 ## Build
 
-You will need a nightly toolchain. Then just see the `Makefile`. 
+You will need a nightly toolchain. `make release` - will build a release version, `make csv` and `make json` - will run corresponding examples.
 
 ## Usage
 
