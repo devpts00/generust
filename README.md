@@ -2,7 +2,7 @@
 
 ## Summary
 
-Dumb data generator tool. Consumes a template string with macros that emit sequential or random data. Rest of the string goes to the output as is. That allows constructing pretty much any new line separated text. Templates to generate JSON and CSV data are proveded as examples.
+Dumb data generator tool. Consumes a template string with macros that emit sequential or random data. Rest of the string goes to the output as is. That allows constructing pretty much any new line separated text. Templates to generate JSON and CSV are provided as examples.
 
 ## Build
 
