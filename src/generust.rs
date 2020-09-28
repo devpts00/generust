@@ -8,11 +8,13 @@ use chrono::{Duration, Local, NaiveDate, NaiveDateTime, ParseError};
 use memmap::{Mmap, MmapOptions};
 use rand::Rng;
 use regex::Regex;
+use std::ffi::OsString;
 use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Error {
     Macro(String),
+    OsString(OsString),
     Io(std::io::Error),
     Regex(regex::Error),
     Glob(glob::GlobError),
@@ -26,6 +28,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Macro(txt) => Display::fmt(txt, f),
+            Error::OsString(str) => Display::fmt(str.to_string_lossy().as_ref(), f),
             Error::Io(err) => Display::fmt(err, f),
             Error::Regex(err) => Display::fmt(err, f),
             Error::Glob(err) => Display::fmt(err, f),
@@ -34,6 +37,12 @@ impl Display for Error {
             Error::ParseChrono(err) => Display::fmt(err, f),
             Error::ParseInt(err) => Display::fmt(err, f),
         }
+    }
+}
+
+impl From<OsString> for Error {
+    fn from(str: OsString) -> Self {
+        Error::OsString(str)
     }
 }
 
@@ -112,7 +121,7 @@ impl RowNum {
         let start: i32 = match args.len() {
             0 => 0,
             1 => args[0].parse::<i32>()?,
-            _ => return Err(Error::Macro("INDEX - too many arguments".to_string())),
+            _ => return Err(Error::Macro("ROW_NUM".to_string())),
         };
         Ok(Box::new(RowNum { start }))
     }
@@ -205,7 +214,7 @@ impl IntSeq {
             0 => (0, std::i32::MAX),
             1 => (0, args[0].parse()?),
             2 => (args[0].parse()?, args[1].parse()?),
-            _ => return Err(Error::Macro("INT_SEQ - too many arguments".to_string())),
+            _ => return Err(Error::Macro("INT_SEQ".to_string())),
         };
         Ok(Box::new(IntSeq { start, end }))
     }
@@ -228,7 +237,7 @@ impl IntRnd {
             0 => (0, std::i32::MAX),
             1 => (0, args[0].parse()?),
             2 => (args[0].parse()?, args[1].parse()?),
-            _ => return Err(Error::Macro("INT_RND - too many arguments".to_string())),
+            _ => return Err(Error::Macro("INT_RND".to_string())),
         };
         Ok(Box::new(IntRnd { start, end }))
     }
@@ -303,7 +312,7 @@ impl EnumRnd {
             let path = tz?;
             if path.is_file() {
                 if let Some(name) = path.file_name() {
-                    vs.push(name.to_os_string().into_string().unwrap())
+                    vs.push(name.to_os_string().into_string()?)
                 }
             }
         }
