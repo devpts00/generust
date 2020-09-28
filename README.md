@@ -99,18 +99,18 @@ Sequential last name from the hardcoded list.
 Random last name from the hardcoded list.
 - `${LAST_RND}` ⇒ `Equils,Greth,Polycarpe...`
 
-###DOMAIN_SEQ
+#### DOMAIN_SEQ
 Sequential domain from the hardcoded list.
 - `${DOMAIN_SEQ}` ⇒ `aaamail.zzn.com,aamail.net,aapt.net.au...`
 
-####DOMAIN_RND
+#### DOMAIN_RND
 Random domain from the hardcoded list. 
 - `${DOMAIN_RND}` ⇒ `petml.com,freemail.de,luukku.com...` 
  
-####FILE_SEQ
+#### FILE_SEQ
 Sequential lines from the specified text file.
 - `${FILE_SEQ}` ⇒ `one,two,three...`
 
-####FILE_RND
+#### FILE_RND
 Random lines from the specified text file.
 - `${FILE_RND}` ⇒ `five,nine,six...`
