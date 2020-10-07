@@ -42,3 +42,12 @@ callgrind: build
 
 cachegrind: release
 	cd examples && cat template.csv | valgrind --tool=cachegrind ../$(DEBUG) -c 10000 >/dev/null
+
+helgrind: release
+	cd examples && cat template.csv | valgrind --tool=helgrind ../$(DEBUG) -c 10000 >/dev/null
+
+drd: release
+	cd examples && cat template.csv | valgrind --tool=drd ../$(DEBUG) -c 10000 >/dev/null
+
+massif: release
+	cd examples && cat template.csv | valgrind --tool=massif ../$(DEBUG) -c 10000 >/dev/null
