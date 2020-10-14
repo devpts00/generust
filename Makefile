@@ -25,6 +25,9 @@ format:
 clippy:
 	cargo clippy
 
+run: build
+	cd examples && cat template.csv | ../$(DEBUG) -c 10 -v 5
+
 csv: release
 	cd examples && cat template.csv | ../$(RELEASE) -c 5 | column -s, -t
 

@@ -649,12 +649,16 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
+
+    extern crate test;
+
     use std::net::Ipv4Addr;
 
     use chrono::{DateTime, NaiveDate};
     use uuid::Uuid;
 
     use crate::generust::{Generust, Parser};
+    use test::Bencher;
 
     fn parser() -> Parser {
         Parser::new("\\$", ",").unwrap()
@@ -817,5 +821,10 @@ mod test {
             .unwrap();
         let mut buf = Vec::with_capacity(128);
         assert!(g.generate(0, &mut buf).is_ok());
+    }
+
+    #[bench]
+    fn bench_bytes_rnd(b: &mut Bencher) {
+        b.iter(|| test_bytes_rnd())
     }
 }

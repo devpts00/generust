@@ -1,4 +1,5 @@
 #![feature(try_trait)]
+#![feature(test)]
 
 use std::io::{BufWriter, Read, Write};
 
