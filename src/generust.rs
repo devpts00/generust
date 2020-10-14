@@ -261,10 +261,10 @@ impl IpV4 {
 impl Generust for IpV4 {
     fn generate(&mut self, _i: i32, w: &mut dyn Write) -> Result<()> {
         let mut rng = rand::thread_rng();
-        let b1 = rng.gen_range(1, 255);
-        let b2 = rng.gen_range(1, 255);
-        let b3 = rng.gen_range(1, 255);
-        let b4 = rng.gen_range(1, 255);
+        let b1: u8 = rng.gen_range(1, 255);
+        let b2: u8 = rng.gen_range(0, 255);
+        let b3: u8 = rng.gen_range(0, 255);
+        let b4: u8 = rng.gen_range(1, 255);
         Ok(write!(w, "{}.{}.{}.{}", b1, b2, b3, b4)?)
     }
 }
