@@ -418,7 +418,7 @@ impl<'a> Generust for BytesRnd<'a> {
 fn next_line<'a>(data: &'a [u8], offset: &mut usize) -> &'a [u8] {
     let start = *offset;
     let mut end = *offset;
-    while end < data.len() && data[end] != b'\n' {
+    while data[end] != b'\n' && end < data.len() {
         end += 1;
     }
     *offset = end + 1;
