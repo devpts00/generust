@@ -371,11 +371,11 @@ fn random_line(data: &[u8]) -> &[u8] {
     let mut rng = rand::thread_rng();
     let offset = rng.gen_range(0, data.len());
     let mut start = offset;
-    while start > 0 && data[start - 1] != b'\n' {
+    while data[start - 1] != b'\n' && start > 0 {
         start -= 1;
     }
     let mut end = offset;
-    while end < data.len() && data[end] != b'\n' {
+    while data[end] != b'\n' && end < data.len() {
         end += 1;
     }
     &data[start..end]
