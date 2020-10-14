@@ -371,11 +371,11 @@ fn random_line(data: &[u8]) -> &[u8] {
     let mut rng = rand::thread_rng();
     let offset = rng.gen_range(0, data.len());
     let mut start = offset;
-    while data[start - 1] != b'\n' && start > 0 {
+    while start > 0 && data[start - 1] != b'\n' {
         start -= 1;
     }
     let mut end = offset;
-    while data[end] != b'\n' && end < data.len() {
+    while end < data.len() && data[end] != b'\n' {
         end += 1;
     }
     &data[start..end]
@@ -418,7 +418,7 @@ impl<'a> Generust for BytesRnd<'a> {
 fn next_line<'a>(data: &'a [u8], offset: &mut usize) -> &'a [u8] {
     let start = *offset;
     let mut end = *offset;
-    while data[end] != b'\n' && end < data.len() {
+    while end < data.len() && data[end] != b'\n' {
         end += 1;
     }
     *offset = end + 1;
