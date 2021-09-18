@@ -46,7 +46,7 @@ fn main() {
 
     match logger::setup(opts.verbose) {
         Ok(()) => log::debug!("logger is successfully initialized"),
-        Err(e) => panic!("failed to initalize logger: {}", e),
+        Err(e) => panic!("failed to initialize logger: {}", e),
     }
 
     if atty::is(atty::Stream::Stdin) {
